@@ -1,49 +1,7 @@
+@import "./tk-theme.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
-
-:root {
-  --bg:        220 15% 98%;
-  --surface:   0 0% 100%;
-  --border:    220 12% 90%;
-  --muted:     220 10% 55%;
-  --subtle:    220 15% 96%;
-  --fg:        220 25% 12%;
-  --accent:    174 72% 38%;
-  --accent-fg: 0 0% 100%;
-  --success:   152 60% 40%;
-  --warn:      34 92% 50%;
-  --danger:    0 72% 52%;
-}
-.dark {
-  --bg:        220 25% 8%;
-  --surface:   220 22% 11%;
-  --border:    220 15% 20%;
-  --muted:     220 10% 62%;
-  --subtle:    220 18% 14%;
-  --fg:        220 20% 96%;
-  --accent:    174 72% 44%;
-  --accent-fg: 220 30% 8%;
-  --success:   152 55% 50%;
-  --warn:      34 92% 58%;
-  --danger:    0 72% 60%;
-}
-
-html, body { height: 100%; }
-body {
-  background: hsl(var(--bg));
-  color: hsl(var(--fg));
-  font-family: Inter, system-ui, sans-serif;
-  font-feature-settings: "cv02","cv03","cv04","cv11";
-  -webkit-font-smoothing: antialiased;
-}
-
-.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
-
-/* scrollbar */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted) / 0.5); }
+/* Tailwind base and utilities remain available for spacing/flex; visuals come from tk-*. */
+html, body { background: var(--tk-bg); color: var(--tk-text); }

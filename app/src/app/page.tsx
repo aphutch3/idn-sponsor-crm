@@ -39,13 +39,13 @@ export default async function OverviewPage() {
   const maxMacro = macroRows[0]?.[1] || 1;
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div style={{ padding: "32px 40px", maxWidth: 1240, margin: "0 auto" }}>
       <PageHeader
+        eyebrow="Overview"
         title="Sponsor CRM"
         subtitle={`${fmtNum(totalCompanies || 0)} companies · ${fmtNum(totalContacts || 0)} contacts · agent-driven`}
       />
 
-      {/* Priority stats */}
       <div className="grid grid-cols-5 gap-3 mb-6">
         <Stat label="Companies" value={fmtNum(totalCompanies || 0)} icon={<Building2 className="w-3.5 h-3.5" />} />
         <Stat label="Contacts" value={fmtNum(totalContacts || 0)} icon={<Users className="w-3.5 h-3.5" />} />
@@ -55,64 +55,61 @@ export default async function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
-        {/* Sponsor tiers */}
-        <Card className="p-4">
+        <Card className="p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium">Sponsor tiers</div>
-            <Link href="/pipeline" className="text-xs text-accent hover:underline">Pipeline →</Link>
+            <div className="tk-eyebrow">Sponsor tiers</div>
+            <Link href="/pipeline" style={{ color: "var(--tk-teal)", fontSize: 12 }}>Pipeline →</Link>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {tierOrder.filter(t => tierBuckets[t]).map(t => {
               const n = tierBuckets[t];
               const max = Math.max(...Object.values(tierBuckets));
               return (
                 <div key={t} className="flex items-center gap-2 text-sm">
                   <span className="w-32 truncate">{t}</span>
-                  <div className="flex-1 h-2 bg-subtle rounded overflow-hidden">
-                    <div className="h-full bg-accent" style={{ width: `${(n / max) * 100}%` }} />
+                  <div className="tk-progress" style={{ flex: 1 }}>
+                    <div className="tk-progress-fill lime" style={{ width: `${(n / max) * 100}%` }} />
                   </div>
-                  <span className="mono text-xs text-muted w-8 text-right">{n}</span>
+                  <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--tk-text-muted)", width: 32, textAlign: "right" }}>{n}</span>
                 </div>
               );
             })}
           </div>
         </Card>
 
-        {/* Macro categories */}
-        <Card className="p-4">
+        <Card className="p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium flex items-center gap-1.5"><FolderTree className="w-3.5 h-3.5" /> Macro categories</div>
-            <Link href="/taxonomy" className="text-xs text-accent hover:underline">Browse taxonomy →</Link>
+            <div className="tk-eyebrow flex items-center gap-1.5"><FolderTree className="w-3.5 h-3.5" /> Macro categories</div>
+            <Link href="/taxonomy" style={{ color: "var(--tk-teal)", fontSize: 12 }}>Browse taxonomy →</Link>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {macroRows.slice(0, 8).map(([k, n]) => (
-              <Link key={k} href={{ pathname: "/taxonomy", query: { macro: k } }} className="flex items-center gap-2 text-sm hover:text-accent group">
+              <Link key={k} href={{ pathname: "/taxonomy", query: { macro: k } }} className="flex items-center gap-2 text-sm">
                 <span className="flex-1 truncate">{k}</span>
-                <div className="w-24 h-2 bg-subtle rounded overflow-hidden">
-                  <div className="h-full bg-accent/70 group-hover:bg-accent" style={{ width: `${(n / maxMacro) * 100}%` }} />
+                <div className="tk-progress" style={{ width: 96 }}>
+                  <div className="tk-progress-fill teal" style={{ width: `${(n / maxMacro) * 100}%` }} />
                 </div>
-                <span className="mono text-xs text-muted w-10 text-right">{fmtNum(n)}</span>
+                <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--tk-text-muted)", width: 40, textAlign: "right" }}>{fmtNum(n)}</span>
               </Link>
             ))}
           </div>
         </Card>
       </div>
 
-      {/* Recent engagement */}
-      <Card className="p-4">
+      <Card className="p-5">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-sm font-medium">Most recent email opens</div>
-          <Link href="/contacts" className="text-xs text-accent hover:underline">All contacts →</Link>
+          <div className="tk-eyebrow">Recent email opens</div>
+          <Link href="/contacts" style={{ color: "var(--tk-teal)", fontSize: 12 }}>All contacts →</Link>
         </div>
         {(!recentEng || recentEng.length === 0) ? (
-          <div className="text-sm text-muted py-4 text-center">No engagement data yet.</div>
+          <div style={{ color: "var(--tk-text-muted)", fontSize: 13, padding: 16, textAlign: "center" }}>No engagement data yet.</div>
         ) : (
-          <div className="space-y-1">
+          <div>
             {recentEng.map((c: any) => (
-              <Link key={c.id} href={`/contacts/${c.id}`} className="flex items-center gap-2 text-sm px-2 py-1.5 -mx-2 rounded hover:bg-subtle">
+              <Link key={c.id} href={`/contacts/${c.id}`} className="flex items-center gap-2 text-sm" style={{ padding: "8px 4px", borderTop: "1px solid var(--tk-border)" }}>
                 <span className="flex-1 truncate">{c.first_name} {c.last_name}</span>
-                <span className="text-xs text-muted truncate max-w-[240px]">{c.email}</span>
-                <span className="mono text-xs text-muted w-24 text-right">{fmtDate(c.last_email_open_date)}</span>
+                <span style={{ fontSize: 12, color: "var(--tk-text-muted)", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis" }}>{c.email}</span>
+                <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--tk-text-muted)", width: 96, textAlign: "right" }}>{fmtDate(c.last_email_open_date)}</span>
               </Link>
             ))}
           </div>
