@@ -1,0 +1,172 @@
+[companies_000.sql] 200 rows -> 3 chunks
+  OK chunk 0 (97 rows, 100824 bytes)
+  OK chunk 1 (98 rows, 101613 bytes)
+  OK chunk 2 (5 rows, 7158 bytes)
+[companies_000.sql] DONE
+[companies_001.sql] 200 rows -> 3 chunks
+  OK chunk 0 (97 rows, 100792 bytes)
+  OK chunk 1 (97 rows, 101217 bytes)
+  OK chunk 2 (6 rows, 7959 bytes)
+[companies_001.sql] DONE
+[companies_002.sql] 200 rows -> 3 chunks
+  OK chunk 0 (90 rows, 101596 bytes)
+  OK chunk 1 (85 rows, 101330 bytes)
+  OK chunk 2 (25 rows, 28440 bytes)
+[companies_002.sql] DONE
+[companies_003.sql] 200 rows -> 3 chunks
+  OK chunk 0 (85 rows, 101534 bytes)
+  OK chunk 1 (75 rows, 100432 bytes)
+  OK chunk 2 (40 rows, 58826 bytes)
+[companies_003.sql] DONE
+[companies_004.sql] 200 rows -> 3 chunks
+  OK chunk 0 (70 rows, 100403 bytes)
+  OK chunk 1 (68 rows, 100519 bytes)
+  OK chunk 2 (62 rows, 93473 bytes)
+[companies_004.sql] DONE
+[companies_005.sql] 200 rows -> 3 chunks
+  OK chunk 0 (79 rows, 101365 bytes)
+  OK chunk 1 (74 rows, 100676 bytes)
+  OK chunk 2 (47 rows, 63888 bytes)
+[companies_005.sql] DONE
+[companies_006.sql] 200 rows -> 3 chunks
+  OK chunk 0 (76 rows, 100877 bytes)
+  OK chunk 1 (66 rows, 101627 bytes)
+  OK chunk 2 (58 rows, 97506 bytes)
+[companies_006.sql] DONE
+[companies_007.sql] 200 rows -> 3 chunks
+  OK chunk 0 (71 rows, 101520 bytes)
+  OK chunk 1 (73 rows, 100854 bytes)
+  OK chunk 2 (56 rows, 90486 bytes)
+[companies_007.sql] DONE
+[companies_008.sql] 200 rows -> 4 chunks
+  OK chunk 0 (63 rows, 101491 bytes)
+  OK chunk 1 (68 rows, 100635 bytes)
+  OK chunk 2 (59 rows, 101173 bytes)
+  OK chunk 3 (10 rows, 17020 bytes)
+[companies_008.sql] DONE
+[companies_009.sql] 200 rows -> 4 chunks
+  OK chunk 0 (62 rows, 101605 bytes)
+  OK chunk 1 (58 rows, 101428 bytes)
+  OK chunk 2 (56 rows, 101007 bytes)
+  OK chunk 3 (24 rows, 51393 bytes)
+[companies_009.sql] DONE
+[companies_010.sql] 87 rows -> 3 chunks
+  OK chunk 0 (47 rows, 100440 bytes)
+  OK chunk 1 (37 rows, 98638 bytes)
+  OK chunk 2 (3 rows, 14381 bytes)
+[companies_010.sql] DONE
+[contacts_000.sql] 200 rows -> 3 chunks
+  OK chunk 0 (110 rows, 101627 bytes)
+  OK chunk 1 (68 rows, 100714 bytes)
+  OK chunk 2 (22 rows, 31488 bytes)
+[contacts_000.sql] DONE
+[contacts_001.sql] 200 rows -> 3 chunks
+  OK chunk 0 (78 rows, 102162 bytes)
+  OK chunk 1 (68 rows, 101876 bytes)
+  OK chunk 2 (54 rows, 77074 bytes)
+[contacts_001.sql] DONE
+[contacts_002.sql] 200 rows -> 4 chunks
+  OK chunk 0 (58 rows, 100910 bytes)
+  OK chunk 1 (51 rows, 102027 bytes)
+  OK chunk 2 (50 rows, 100742 bytes)
+  OK chunk 3 (41 rows, 58416 bytes)
+[contacts_002.sql] DONE
+[contacts_003.sql] 200 rows -> 3 chunks
+  FAIL chunk 0: rc=1: {"error":{"code":"CONNECTOR_RATE_LIMITED","message":"The connector request was rate limited. Please try again later.","command":"connector.call"}}
+
+[contacts_003.sql] 200 rows -> 3 chunks
+  OK chunk 0 (99 rows, 101765 bytes)
+  OK chunk 1 (100 rows, 101863 bytes)
+  OK chunk 2 (1 rows, 3363 bytes)
+[contacts_003.sql] DONE
+[contacts_004.sql] 200 rows -> 3 chunks
+  OK chunk 0 (100 rows, 102109 bytes)
+  OK chunk 1 (99 rows, 101970 bytes)
+  OK chunk 2 (1 rows, 3325 bytes)
+[contacts_004.sql] DONE
+[contacts_005.sql] 200 rows -> 3 chunks
+  OK chunk 0 (100 rows, 101763 bytes)
+  OK chunk 1 (99 rows, 101626 bytes)
+  OK chunk 2 (1 rows, 3326 bytes)
+[contacts_005.sql] DONE
+[contacts_006.sql] 200 rows -> 4 chunks
+  OK chunk 0 (61 rows, 100893 bytes)
+  OK chunk 1 (51 rows, 100896 bytes)
+  OK chunk 2 (50 rows, 100644 bytes)
+  OK chunk 3 (38 rows, 77334 bytes)
+[contacts_006.sql] DONE
+[contacts_007.sql] 200 rows -> 4 chunks
+  OK chunk 0 (51 rows, 101670 bytes)
+  OK chunk 1 (51 rows, 100380 bytes)
+  OK chunk 2 (51 rows, 101265 bytes)
+  OK chunk 3 (47 rows, 94957 bytes)
+[contacts_007.sql] DONE
+[contacts_008.sql] 200 rows -> 4 chunks
+  OK chunk 0 (52 rows, 101157 bytes)
+  OK chunk 1 (51 rows, 101169 bytes)
+  OK chunk 2 (49 rows, 100875 bytes)
+  OK chunk 3 (48 rows, 98843 bytes)
+[contacts_008.sql] DONE
+[contacts_009.sql] 200 rows -> 4 chunks
+  OK chunk 0 (50 rows, 101467 bytes)
+  OK chunk 1 (50 rows, 101537 bytes)
+  OK chunk 2 (49 rows, 101637 bytes)
+  OK chunk 3 (51 rows, 98941 bytes)
+[contacts_009.sql] DONE
+[contacts_010.sql] 200 rows -> 5 chunks
+  OK chunk 0 (50 rows, 101715 bytes)
+  OK chunk 1 (50 rows, 101427 bytes)
+  OK chunk 2 (48 rows, 102119 bytes)
+  OK chunk 3 (49 rows, 101705 bytes)
+  OK chunk 4 (3 rows, 8324 bytes)
+[contacts_010.sql] DONE
+[contacts_011.sql] 200 rows -> 4 chunks
+  OK chunk 0 (50 rows, 99953 bytes)
+  OK chunk 1 (51 rows, 100779 bytes)
+  OK chunk 2 (51 rows, 100647 bytes)
+  OK chunk 3 (48 rows, 95718 bytes)
+[contacts_011.sql] DONE
+[contacts_012.sql] 200 rows -> 5 chunks
+  OK chunk 0 (49 rows, 100546 bytes)
+  OK chunk 1 (48 rows, 100540 bytes)
+  OK chunk 2 (50 rows, 102218 bytes)
+  OK chunk 3 (51 rows, 101468 bytes)
+  OK chunk 4 (2 rows, 6340 bytes)
+[contacts_012.sql] DONE
+[contacts_013.sql] 200 rows -> 4 chunks
+  OK chunk 0 (53 rows, 101249 bytes)
+  OK chunk 1 (52 rows, 102167 bytes)
+  OK chunk 2 (52 rows, 102195 bytes)
+  OK chunk 3 (43 rows, 83606 bytes)
+[contacts_013.sql] DONE
+[contacts_014.sql] 200 rows -> 4 chunks
+  OK chunk 0 (52 rows, 102196 bytes)
+  OK chunk 1 (53 rows, 101429 bytes)
+  OK chunk 2 (52 rows, 101790 bytes)
+  OK chunk 3 (43 rows, 84890 bytes)
+[contacts_014.sql] DONE
+[contacts_015.sql] 200 rows -> 4 chunks
+  OK chunk 0 (52 rows, 101910 bytes)
+  OK chunk 1 (50 rows, 100947 bytes)
+  OK chunk 2 (51 rows, 101100 bytes)
+  OK chunk 3 (47 rows, 93126 bytes)
+[contacts_015.sql] DONE
+[contacts_016.sql] 200 rows -> 5 chunks
+  OK chunk 0 (53 rows, 100957 bytes)
+  OK chunk 1 (50 rows, 100985 bytes)
+  OK chunk 2 (48 rows, 100343 bytes)
+  OK chunk 3 (46 rows, 100627 bytes)
+  OK chunk 4 (3 rows, 8997 bytes)
+[contacts_016.sql] DONE
+[contacts_017.sql] 200 rows -> 5 chunks
+  OK chunk 0 (45 rows, 101027 bytes)
+  OK chunk 1 (44 rows, 101938 bytes)
+  OK chunk 2 (47 rows, 102332 bytes)
+  OK chunk 3 (44 rows, 100474 bytes)
+  OK chunk 4 (20 rows, 46468 bytes)
+[contacts_017.sql] DONE
+[contacts_018.sql] 99 rows -> 3 chunks
+  OK chunk 0 (42 rows, 100060 bytes)
+  OK chunk 1 (44 rows, 101478 bytes)
+  OK chunk 2 (13 rows, 34096 bytes)
+[contacts_018.sql] DONE

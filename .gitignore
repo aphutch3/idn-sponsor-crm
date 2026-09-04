@@ -1,0 +1,16 @@
+# deps
+node_modules/
+# next build
+.next/
+out/
+# env
+.env.local
+.env*.local
+# logs
+*.log
+# CSVs w/ PII — keep out of git
+data/*.csv
+# generated bulk SQL
+/out/
+# os
+.DS_Store
