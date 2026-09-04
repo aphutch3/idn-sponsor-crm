@@ -18,10 +18,9 @@ type Row = {
   summit_interest: string[] | null;
   is_customer?: boolean | null;
   stay_on_top?: boolean | null;
-  linkedin_bio?: string | null;
-  headquarters?: string | null;
-  employee_count?: string | number | null;
-  primary_hq_country?: string | null;
+  industry?: string | null;
+  number_of_employees?: string | number | null;
+  linkedin_url?: string | null;
 };
 
 type Props = {
@@ -246,9 +245,9 @@ function PropertiesPanel({ company }: { company: Row }) {
         <Field label="Company type" value={company.company_type} />
         <Field label="Macro category" value={company.macro_category} />
         <Field label="Subcategory" value={company.subcategory} />
-        <Field label="Country" value={company.country_region || company.primary_hq_country} />
-        <Field label="Headquarters" value={company.headquarters} />
-        <Field label="Employees" value={company.employee_count as any} />
+        <Field label="Country" value={company.country_region} />
+        <Field label="Industry" value={company.industry} />
+        <Field label="Employees" value={company.number_of_employees as any} />
         <Field label="Summit interest" value={(company.summit_interest || []).join(", ")} />
       </dl>
 

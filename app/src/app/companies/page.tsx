@@ -11,7 +11,7 @@ export default async function CompaniesPage({ searchParams }: { searchParams: { 
   const to = from + PER - 1;
 
   let query = db.from("companies").select(
-    "id, name, domain, sponsor_tier, sponsor_tier_rank, macro_category, subcategory, country_region, company_type, summit_interest, is_customer, stay_on_top, headquarters, employee_count, primary_hq_country",
+    "id, name, domain, sponsor_tier, sponsor_tier_rank, macro_category, subcategory, country_region, company_type, summit_interest, is_customer, stay_on_top, industry, number_of_employees, linkedin_url",
     { count: "exact" }
   );
 
