@@ -2,6 +2,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
+import { EngagementPanel as RealEngagementPanel, SendRow } from "./engagement-panel";
 
 // --- Types ---------------------------------------------------------------
 
@@ -26,6 +27,7 @@ export type ContactRow = {
   emails_clicked: number | null;
   emails_replied: number | null;
   emails_bounced: number | null;
+  unsubscribed_all_email?: boolean | null;
   last_email_send_date: string | null;
   last_email_open_date: string | null;
   last_email_click_date: string | null;
@@ -48,6 +50,8 @@ export type ActivityRow = {
   subject: string | null;
   body: string | null;
   occurred_at: string | null;
+  source?: string | null;
+  meta?: Record<string, any> | null;
 };
 
 type Tab = "overview" | "biography" | "engagement" | "connections" | "journal";
@@ -66,10 +70,12 @@ export function ContactShell({
   contact,
   company,
   activity,
+  sends = [],
 }: {
   contact: ContactRow;
   company: CompanyStub;
   activity: ActivityRow[];
+  sends?: SendRow[];
 }) {
   const [tab, setTab] = React.useState<Tab>("overview");
   const [leftOpen, setLeftOpen] = React.useState(true);
@@ -207,7 +213,13 @@ export function ContactShell({
         <div style={{ padding: "24px 32px 40px" }}>
           {tab === "overview" && <OverviewPanel contact={contact} activity={activity} />}
           {tab === "biography" && <BiographyPanel contact={contact} />}
-          {tab === "engagement" && <EngagementPanel contact={contact} />}
+          {tab === "engagement" && (
+            <RealEngagementPanel
+              contact={contact as any}
+              sends={sends}
+              activities={activity}
+            />
+          )}
           {tab === "connections" && <ConnectionsPanel contact={contact} company={company} />}
           {tab === "journal" && <JournalPanel contact={contact} />}
         </div>
@@ -490,24 +502,6 @@ function BiographyPanel({ contact }: { contact: ContactRow }) {
           <Placeholder text="Personal-context capture." />
         </PanelCard>
       </div>
-    </div>
-  );
-}
-
-function EngagementPanel({ contact }: { contact: ContactRow }) {
-  const channels = [
-    { key: "email", label: "Email", hint: contact.email || "—" },
-    { key: "x", label: "X.com", hint: contact.twitter_username || "—" },
-    { key: "linkedin", label: "LinkedIn", hint: contact.linkedin_url ? "connected" : "—" },
-  ];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 16 }}>
-      {channels.map((c) => (
-        <PanelCard key={c.key} title={c.label} eyebrow="Channel">
-          <div style={{ fontSize: 12, color: "var(--tk-text-muted)", marginBottom: 8 }}>{c.hint}</div>
-          <Placeholder text={`${c.label} composer + tracked history land with the Engagement iteration.`} />
-        </PanelCard>
-      ))}
     </div>
   );
 }
