@@ -97,7 +97,7 @@ export function AppSwitcher() {
             </div>
             <div
               className="tk-editorial"
-              style={{ fontSize: 16, color: "var(--tk-text-primary)" }}
+              style={{ fontSize: 16, color: "var(--tk-text)" }}
             >
               Switch app
             </div>
@@ -131,7 +131,7 @@ export function AppSwitcher() {
                     style={{
                       fontSize: 13,
                       fontWeight: 600,
-                      color: "var(--tk-text-primary)",
+                      color: "var(--tk-text)",
                     }}
                   >
                     {app.name}
