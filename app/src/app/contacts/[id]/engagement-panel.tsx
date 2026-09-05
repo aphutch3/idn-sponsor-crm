@@ -61,6 +61,7 @@ export function EngagementPanel({
   activities: ActivityRow[];
 }) {
   const router = useRouter();
+  const [channel, setChannel] = React.useState<Channel>("email");
 
   // Partition activities by channel using kind + meta.channel
   const byChannel = React.useMemo(() => {
@@ -76,24 +77,122 @@ export function EngagementPanel({
     return { email, x, linkedin };
   }, [activities]);
 
+  const tabs: { key: Channel; label: string; accent: string; count: number; sub: string }[] = [
+    {
+      key: "email",
+      label: "Email",
+      accent: "#00afa8",
+      count: (sends?.length || 0) + byChannel.email.length,
+      sub: contact.email || "no email",
+    },
+    {
+      key: "x",
+      label: "X.com",
+      accent: "#111318",
+      count: byChannel.x.length,
+      sub: contact.twitter_username ? `@${contact.twitter_username}` : "no handle",
+    },
+    {
+      key: "linkedin",
+      label: "LinkedIn",
+      accent: "#0a66c2",
+      count: byChannel.linkedin.length,
+      sub: contact.linkedin_url ? "profile on file" : "no profile",
+    },
+  ];
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16 }}>
-      <EmailChannel
-        contact={contact}
-        sends={sends}
-        activities={byChannel.email}
-        onChange={() => router.refresh()}
-      />
-      <XChannel
-        contact={contact}
-        activities={byChannel.x}
-        onChange={() => router.refresh()}
-      />
-      <LinkedInChannel
-        contact={contact}
-        activities={byChannel.linkedin}
-        onChange={() => router.refresh()}
-      />
+    <div style={{ display: "grid", gap: 12 }}>
+      <ChannelTabs tabs={tabs} active={channel} onSelect={setChannel} />
+      {channel === "email" && (
+        <EmailChannel
+          contact={contact}
+          sends={sends}
+          activities={byChannel.email}
+          onChange={() => router.refresh()}
+        />
+      )}
+      {channel === "x" && (
+        <XChannel
+          contact={contact}
+          activities={byChannel.x}
+          onChange={() => router.refresh()}
+        />
+      )}
+      {channel === "linkedin" && (
+        <LinkedInChannel
+          contact={contact}
+          activities={byChannel.linkedin}
+          onChange={() => router.refresh()}
+        />
+      )}
+    </div>
+  );
+}
+
+function ChannelTabs({
+  tabs,
+  active,
+  onSelect,
+}: {
+  tabs: { key: Channel; label: string; accent: string; count: number; sub: string }[];
+  active: Channel;
+  onSelect: (c: Channel) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Engagement channel"
+      style={{
+        display: "flex",
+        gap: 4,
+        borderBottom: "1px solid var(--tk-border)",
+        alignItems: "stretch",
+      }}
+    >
+      {tabs.map((t) => {
+        const isActive = t.key === active;
+        return (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onSelect(t.key)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 16px",
+              background: "transparent",
+              border: "none",
+              borderBottom: isActive ? `2px solid ${t.accent}` : "2px solid transparent",
+              marginBottom: -1,
+              cursor: "pointer",
+              color: isActive ? "var(--tk-text)" : "var(--tk-text-muted)",
+              fontWeight: isActive ? 600 : 500,
+              fontSize: 14,
+            }}
+          >
+            <ChannelGlyph channel={t.key} accent={t.accent} size={26} />
+            <span style={{ display: "grid", textAlign: "left", lineHeight: 1.15 }}>
+              <span>{t.label}</span>
+              <span style={{ fontSize: 11, color: "var(--tk-text-muted)", fontWeight: 400 }}>{t.sub}</span>
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                padding: "1px 8px",
+                borderRadius: 999,
+                background: isActive ? t.accent : "var(--tk-bg-muted, #f4f4f4)",
+                color: isActive ? "white" : "var(--tk-text-muted)",
+                fontWeight: 600,
+              }}
+            >
+              {t.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -706,12 +805,12 @@ function TimelineItemRow({ item, accent }: { item: TimelineItem; accent: string 
   );
 }
 
-function ChannelGlyph({ channel, accent }: { channel: Channel; accent: string }) {
+function ChannelGlyph({ channel, accent, size = 36 }: { channel: Channel; accent: string; size?: number }) {
   return (
     <div style={{
-      width: 36, height: 36, borderRadius: 8, background: accent, color: "white",
+      width: size, height: size, borderRadius: Math.max(6, Math.round(size * 0.22)), background: accent, color: "white",
       display: "inline-flex", alignItems: "center", justifyContent: "center",
-      fontFamily: "var(--tk-font-serif)", fontSize: 16, flexShrink: 0,
+      fontFamily: "var(--tk-font-serif)", fontSize: Math.round(size * 0.45), flexShrink: 0,
     }}>
       {channel === "email" ? "✉" : channel === "x" ? "𝕏" : "in"}
     </div>
