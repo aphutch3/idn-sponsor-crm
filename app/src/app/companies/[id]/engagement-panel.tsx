@@ -367,9 +367,9 @@ function XChannel({
 
   const composerText = encodeURIComponent(
     note + (targetId
-      ? ` @${((contacts.find((c) => c.id === targetId) as any)?.twitter_username || "").replace(/^@/, "")}`
+      ? ` @${xHandle((contacts.find((c) => c.id === targetId) as any)?.twitter_username)}`
       : company.twitter_handle
-      ? ` @${company.twitter_handle.replace(/^@/, "")}`
+      ? ` @${xHandle(company.twitter_handle)}`
       : "")
   );
   const intentUrl = `https://x.com/intent/tweet?text=${composerText}`;
@@ -429,10 +429,10 @@ function XChannel({
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
           <SectionLabel>Target</SectionLabel>
           <select value={targetId} onChange={(e) => setTargetId(e.target.value)} style={inputStyle}>
-            <option value="">Company · @{company.twitter_handle?.replace(/^@/, "") || "no handle"}</option>
+            <option value="">Company · {company.twitter_handle ? `@${xHandle(company.twitter_handle)}` : "no handle"}</option>
             {withHandle.map((c) => (
               <option key={c.id} value={c.id}>
-                {`${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email} · @{(c as any).twitter_username?.replace(/^@/, "")}
+                {`${c.first_name || ""} ${c.last_name || ""}`.trim() || c.email} · @{xHandle((c as any).twitter_username)}
               </option>
             ))}
           </select>
@@ -899,4 +899,11 @@ function stripHtml(s: string): string {
 
 function short(id: string): string {
   return id.slice(0, 8);
+}
+
+function xHandle(v: string | null | undefined): string {
+  if (!v) return "";
+  const m = String(v).match(/(?:x\.com|twitter\.com)\/@?([A-Za-z0-9_]+)/i);
+  if (m) return m[1];
+  return String(v).replace(/^https?:\/\//, "").replace(/^@/, "");
 }
