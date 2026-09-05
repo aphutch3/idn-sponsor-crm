@@ -255,7 +255,7 @@ export function AppSwitcher() {
                             aria-label={`Open ${app.name}`}
                             className="app-switcher-btn app-switcher-btn-view"
                           >
-                            View
+                            V
                           </a>
                           {app.devUrl ? (
                             <a
@@ -267,7 +267,7 @@ export function AppSwitcher() {
                               aria-label={`Continue building ${app.name}`}
                               className="app-switcher-btn app-switcher-btn-dev"
                             >
-                              Dev
+                              D
                             </a>
                           ) : (
                             <span
@@ -275,7 +275,7 @@ export function AppSwitcher() {
                               title="No dev session linked yet"
                               aria-label="No dev session"
                             >
-                              Dev
+                              D
                             </span>
                           )}
                         </div>
@@ -297,18 +297,19 @@ export function AppSwitcher() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          height: 22px;
-          padding: 0 9px;
-          border-radius: 5px;
-          font-size: 10px;
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          border-radius: 4px;
+          font-size: 11px;
           font-weight: 700;
-          letter-spacing: 0.6px;
           text-transform: uppercase;
           text-decoration: none;
           border: 1px solid transparent;
           transition: all 0.12s ease;
           cursor: pointer;
           white-space: nowrap;
+          line-height: 1;
         }
         :global(.app-switcher-btn-view) {
           color: #ffffff;
