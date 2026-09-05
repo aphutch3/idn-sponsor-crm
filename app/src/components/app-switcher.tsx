@@ -4,19 +4,80 @@ import { useState, useRef, useEffect } from "react";
 
 type AppLink = {
   name: string;
-  url: string;
-  description: string;
+  viewUrl: string;
+  devUrl?: string; // Perplexity Computer session where it's being developed
 };
 
-const APPS: AppLink[] = [
-  { name: "IDN Web Site", url: "https://idn-webiste.pplx.app/", description: "Public IDN marketing site" },
-  { name: "Audience List", url: "https://idn-list-campaigns.vercel.app/", description: "Audience database & email campaigns" },
-  { name: "IDN News Dashboard", url: "https://tldr-dashboard-rho.vercel.app/#/", description: "TL;DR news roll-up" },
-  { name: "IDN Signals", url: "https://www.perplexity.ai/computer/a/22a557b1-0286-4190-bb20-25788a39b1c6", description: "Signal monitoring & triage" },
-  { name: "IDN PPC & Clicks", url: "https://www.perplexity.ai/computer/a/713289ae-5292-4e96-87fa-be3a09d9cd11", description: "Paid campaign performance" },
-  { name: "IDN Landscapes", url: "https://landscape-cms.vercel.app/", description: "Market landscape CMS" },
-  { name: "IDN Design", url: "https://idn-design-review.pplx.app/?s=ai-deployment&f=registration&page=stage1&v=ref-original&w=1200&vr=0", description: "Design review workshop" },
-  { name: "IDS MMS", url: "https://idn-mms.vercel.app/dashboard", description: "Media management system" },
+type Group = {
+  label: string;
+  apps: AppLink[];
+};
+
+// Portfolio nav. `devUrl` is the Perplexity session where the app is being built.
+// Fill these in when you send me the session links.
+const GROUPS: Group[] = [
+  {
+    label: "Sales",
+    apps: [
+      { name: "IDN CRM", viewUrl: "https://idn-sponsor-crm.vercel.app/" },
+      { name: "Audience List", viewUrl: "https://idn-list-campaigns.vercel.app/" },
+      { name: "Crunchbase Clone", viewUrl: "https://ai-layers-intelligence.vercel.app/" },
+      { name: "Survey Monkey Clone", viewUrl: "https://idn-surveys.vercel.app/" },
+    ],
+  },
+  {
+    label: "Marketing",
+    apps: [
+      { name: "IDN Web Site", viewUrl: "https://idn-webiste.pplx.app/" },
+      { name: "IDN MMS", viewUrl: "https://idn-mms.vercel.app/dashboard" },
+      {
+        name: "IDN PPC & Clicks",
+        viewUrl: "https://www.perplexity.ai/computer/a/713289ae-5292-4e96-87fa-be3a09d9cd11",
+      },
+      {
+        name: "IDN Design",
+        viewUrl:
+          "https://idn-design-review.pplx.app/?s=ai-deployment&f=registration&page=stage1&v=ref-original&w=1200&vr=0",
+      },
+      {
+        name: "IDN Email Builder",
+        viewUrl:
+          "https://email-builder-v2-git-phase-10a-cx-shell-aphutch3s-projects.vercel.app/dashboard",
+      },
+    ],
+  },
+  {
+    label: "Content",
+    apps: [
+      { name: "IDN News Dashboard", viewUrl: "https://tldr-dashboard-rho.vercel.app/#/" },
+      {
+        name: "IDN Signals",
+        viewUrl: "https://www.perplexity.ai/computer/a/22a557b1-0286-4190-bb20-25788a39b1c6",
+      },
+      { name: "Learning Platform", viewUrl: "https://idn-skill-platform.vercel.app/" },
+      { name: "Infographics", viewUrl: "https://idn-infographics-factory-v2.pplx.app/" },
+      { name: "IDN Landscapes", viewUrl: "https://landscape-cms.vercel.app/" },
+      { name: "Timeline Panel", viewUrl: "https://tdi-viewer-eight.vercel.app/" },
+      { name: "GEO Database", viewUrl: "https://idn-geo-viewer.vercel.app/" },
+    ],
+  },
+  {
+    label: "Research",
+    apps: [
+      { name: "Living Reports Admin", viewUrl: "https://living-reports.pplx.app/#/" },
+      { name: "Musk Control Panel", viewUrl: "https://analysis-company-musk.vercel.app/products" },
+      { name: "PayPal Mafia", viewUrl: "https://paypal-mafia.pplx.app/" },
+    ],
+  },
+  {
+    label: "Control Panels",
+    apps: [
+      { name: "App Mission Control", viewUrl: "https://mission-control-dusky-six.vercel.app/" },
+      { name: "Supabase Admin", viewUrl: "https://supabase-admin-dashboard-three.vercel.app/" },
+      { name: "1776 Admin", viewUrl: "https://1776-artifact-inventory.pplx.app/" },
+      { name: "Home & Contractors", viewUrl: "https://home-os-gules.vercel.app/" },
+    ],
+  },
 ];
 
 export function AppSwitcher() {
@@ -43,8 +104,8 @@ export function AppSwitcher() {
     <div ref={ref} style={{ position: "relative" }}>
       <button
         onClick={() => setOpen((v) => !v)}
-        title="Switch app"
-        aria-label="Switch app"
+        title="Portfolio nav"
+        aria-label="Portfolio nav"
         aria-expanded={open}
         style={{
           width: 34,
@@ -70,100 +131,219 @@ export function AppSwitcher() {
       {open && (
         <div
           style={{
-            position: "absolute",
-            top: "calc(100% + 8px)",
-            right: 0,
-            width: 340,
+            position: "fixed",
+            top: 62,
+            right: 12,
+            width: "min(1180px, calc(100vw - 24px))",
             background: "white",
             border: "1px solid var(--tk-border)",
-            borderRadius: 10,
-            boxShadow: "0 10px 40px rgba(0,0,0,.15)",
-            padding: 8,
+            borderRadius: 12,
+            boxShadow: "0 20px 60px rgba(0,0,0,.22)",
             zIndex: 1000,
+            overflow: "hidden",
           }}
         >
+          {/* Header */}
           <div
             style={{
-              padding: "8px 12px 10px",
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              padding: "14px 20px 12px",
               borderBottom: "1px solid var(--tk-border)",
-              marginBottom: 6,
+              background: "var(--tk-bg-muted)",
             }}
           >
-            <div
-              className="tk-eyebrow"
-              style={{ fontSize: 10, color: "var(--tk-text-muted)" }}
-            >
-              IDN Portfolio
+            <div>
+              <div
+                className="tk-eyebrow"
+                style={{ fontSize: 10, color: "var(--tk-text-muted)", letterSpacing: 1 }}
+              >
+                IDN Portfolio
+              </div>
+              <div className="tk-editorial" style={{ fontSize: 18, color: "var(--tk-text)" }}>
+                Apps, content & reports
+              </div>
             </div>
-            <div
-              className="tk-editorial"
-              style={{ fontSize: 16, color: "var(--tk-text)" }}
-            >
-              Switch app
+            <div style={{ fontSize: 11, color: "var(--tk-text-muted)" }}>
+              View app · jump to dev session
             </div>
           </div>
-          <div style={{ maxHeight: 440, overflowY: "auto" }}>
-            {APPS.map((app) => (
-              <a
-                key={app.name}
-                href={app.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setOpen(false)}
+
+          {/* 5-column grid */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+              gap: 0,
+            }}
+          >
+            {GROUPS.map((group, idx) => (
+              <div
+                key={group.label}
                 style={{
-                  display: "block",
-                  padding: "10px 12px",
-                  borderRadius: 6,
-                  textDecoration: "none",
-                  color: "inherit",
+                  padding: "16px 14px",
+                  borderRight:
+                    idx < GROUPS.length - 1 ? "1px solid var(--tk-border)" : "none",
+                  minWidth: 0,
                 }}
-                className="app-switcher-item"
               >
                 <div
+                  className="tk-eyebrow"
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--tk-text)",
-                    }}
-                  >
-                    {app.name}
-                  </div>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: "var(--tk-text-muted)",
-                    }}
-                    aria-hidden
-                  >
-                    ↗
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
+                    fontSize: 10,
                     color: "var(--tk-text-muted)",
-                    marginTop: 2,
+                    letterSpacing: 1.2,
+                    marginBottom: 10,
+                    paddingBottom: 8,
+                    borderBottom: "1px solid var(--tk-border)",
                   }}
                 >
-                  {app.description}
+                  {group.label}
                 </div>
-              </a>
+
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
+                  }}
+                >
+                  {group.apps.map((app) => (
+                    <li key={app.name} className="app-switcher-row">
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 6,
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          minWidth: 0,
+                        }}
+                      >
+                        <a
+                          href={app.viewUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setOpen(false)}
+                          title={`View ${app.name}`}
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            color: "var(--tk-text)",
+                            textDecoration: "none",
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {app.name}
+                        </a>
+                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                          <a
+                            href={app.viewUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setOpen(false)}
+                            title="Open app"
+                            aria-label={`Open ${app.name}`}
+                            className="app-switcher-icon"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                              <path
+                                d="M14 5h5v5M19 5l-9 9M5 5h4M5 5v4M5 19h14v-4"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </a>
+                          {app.devUrl ? (
+                            <a
+                              href={app.devUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => setOpen(false)}
+                              title="Continue building"
+                              aria-label={`Continue building ${app.name}`}
+                              className="app-switcher-icon app-switcher-icon-dev"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                <path
+                                  d="M8 6l-6 6 6 6M16 6l6 6-6 6"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </a>
+                          ) : (
+                            <span
+                              className="app-switcher-icon app-switcher-icon-empty"
+                              title="No dev session linked yet"
+                              aria-label="No dev session"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                                <path
+                                  d="M8 6l-6 6 6 6M16 6l6 6-6 6"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
           </div>
         </div>
       )}
 
       <style jsx>{`
-        .app-switcher-item:hover {
+        .app-switcher-row > div:hover {
           background: var(--tk-bg-muted);
+        }
+        :global(.app-switcher-icon) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 22px;
+          border-radius: 5px;
+          color: var(--tk-text-muted);
+          border: 1px solid var(--tk-border);
+          background: white;
+          text-decoration: none;
+          transition: all 0.12s ease;
+        }
+        :global(.app-switcher-icon:hover) {
+          color: var(--tk-text);
+          border-color: var(--tk-border-strong);
+          background: var(--tk-bg-muted);
+        }
+        :global(.app-switcher-icon-dev:hover) {
+          color: #111318;
+          background: var(--tk-lime);
+          border-color: var(--tk-lime-strong);
+        }
+        :global(.app-switcher-icon-empty) {
+          color: var(--tk-border-strong);
+          background: transparent;
+          cursor: not-allowed;
         }
       `}</style>
     </div>
