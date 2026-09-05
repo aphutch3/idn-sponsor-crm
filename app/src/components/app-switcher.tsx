@@ -251,19 +251,11 @@ export function AppSwitcher() {
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={() => setOpen(false)}
-                            title="Open app"
+                            title={`Open ${app.name}`}
                             aria-label={`Open ${app.name}`}
-                            className="app-switcher-icon"
+                            className="app-switcher-btn app-switcher-btn-view"
                           >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                              <path
-                                d="M14 5h5v5M19 5l-9 9M5 5h4M5 5v4M5 19h14v-4"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
+                            View
                           </a>
                           {app.devUrl ? (
                             <a
@@ -271,35 +263,19 @@ export function AppSwitcher() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={() => setOpen(false)}
-                              title="Continue building"
+                              title={`Continue building ${app.name}`}
                               aria-label={`Continue building ${app.name}`}
-                              className="app-switcher-icon app-switcher-icon-dev"
+                              className="app-switcher-btn app-switcher-btn-dev"
                             >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                <path
-                                  d="M8 6l-6 6 6 6M16 6l6 6-6 6"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
+                              Dev
                             </a>
                           ) : (
                             <span
-                              className="app-switcher-icon app-switcher-icon-empty"
+                              className="app-switcher-btn app-switcher-btn-empty"
                               title="No dev session linked yet"
                               aria-label="No dev session"
                             >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                                <path
-                                  d="M8 6l-6 6 6 6M16 6l6 6-6 6"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
+                              Dev
                             </span>
                           )}
                         </div>
@@ -317,33 +293,46 @@ export function AppSwitcher() {
         .app-switcher-row > div:hover {
           background: var(--tk-bg-muted);
         }
-        :global(.app-switcher-icon) {
+        :global(.app-switcher-btn) {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 22px;
           height: 22px;
+          padding: 0 8px;
           border-radius: 5px;
-          color: var(--tk-text-muted);
-          border: 1px solid var(--tk-border);
-          background: white;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.6px;
+          text-transform: uppercase;
           text-decoration: none;
+          border: 1px solid transparent;
           transition: all 0.12s ease;
+          cursor: pointer;
+          white-space: nowrap;
         }
-        :global(.app-switcher-icon:hover) {
-          color: var(--tk-text);
-          border-color: var(--tk-border-strong);
-          background: var(--tk-bg-muted);
+        :global(.app-switcher-btn-view) {
+          color: #ffffff;
+          background: #111318;
+          border-color: #111318;
         }
-        :global(.app-switcher-icon-dev:hover) {
+        :global(.app-switcher-btn-view:hover) {
+          background: #1f2937;
+          border-color: #1f2937;
+        }
+        :global(.app-switcher-btn-dev) {
           color: #111318;
           background: var(--tk-lime);
           border-color: var(--tk-lime-strong);
         }
-        :global(.app-switcher-icon-empty) {
-          color: var(--tk-border-strong);
+        :global(.app-switcher-btn-dev:hover) {
+          background: var(--tk-lime-strong);
+        }
+        :global(.app-switcher-btn-empty) {
+          color: var(--tk-text-muted);
           background: transparent;
+          border-color: var(--tk-border);
           cursor: not-allowed;
+          opacity: 0.55;
         }
       `}</style>
     </div>
