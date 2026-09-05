@@ -13,9 +13,14 @@ type Group = {
   apps: AppLink[];
 };
 
-// Portfolio nav. `devUrl` is the Perplexity session where the app is being built.
-// Fill these in when you send me the session links.
-const GROUPS: Group[] = [
+// Canonical source of truth for the app list — one JSON, many apps.
+// Change /apps.json in this repo and every embedding app updates within ~60s.
+const MANIFEST_URL = "https://idn-sponsor-crm.vercel.app/apps.json";
+const CACHE_KEY = "idn-apps-manifest-v1";
+
+// Baked-in fallback used on first paint and when the fetch fails.
+// Keep in sync with public/apps.json in this repo.
+const FALLBACK_GROUPS: Group[] = [
   {
     label: "Sales",
     apps: [
@@ -91,7 +96,44 @@ function dev(sessionId: string): string {
 
 export function AppSwitcher() {
   const [open, setOpen] = useState(false);
+  const [groups, setGroups] = useState<Group[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = window.localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed?.groups)) return parsed.groups as Group[];
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return FALLBACK_GROUPS;
+  });
   const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${MANIFEST_URL}?t=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !Array.isArray(data?.groups)) return;
+        setGroups(data.groups as Group[]);
+        try {
+          window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        } catch {
+          // ignore quota errors
+        }
+      } catch {
+        // keep fallback
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -187,13 +229,13 @@ export function AppSwitcher() {
               gap: 0,
             }}
           >
-            {GROUPS.map((group, idx) => (
+            {groups.map((group, idx) => (
               <div
                 key={group.label}
                 style={{
                   padding: "16px 14px",
                   borderRight:
-                    idx < GROUPS.length - 1 ? "1px solid var(--tk-border)" : "none",
+                    idx < groups.length - 1 ? "1px solid var(--tk-border)" : "none",
                   minWidth: 0,
                 }}
               >
