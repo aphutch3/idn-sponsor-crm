@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AppSwitcher } from "./app-switcher";
 
 // Matches the .tk-nav bar from idn-skill-platform.
 const NAV = [
@@ -37,6 +38,7 @@ export function TopNav() {
         <Link className="tk-btn tk-btn-sm tk-btn-ghost" style={{ borderColor: "#374151", color: "white" }} href="/insights">
           Insights
         </Link>
+        <AppSwitcher />
       </div>
     </nav>
   );
