@@ -5,6 +5,9 @@ import { Badge } from "@/components/ui";
 import { ContactsPanel as RealContactsPanel } from "./contacts-panel";
 import { CompanyEngagementPanel as RealEngagementPanel } from "./engagement-panel";
 import { DealFlowPanel as RealDealFlowPanel } from "./dealflow-panel";
+import { RealOverviewPanel, type TaskItem } from "./overview-panel";
+import { RealConnectionsPanel, type PeerCompany } from "./connections-panel";
+import { RealJournalPanel } from "./journal-panel";
 
 // --- Types ---------------------------------------------------------------
 
@@ -106,11 +109,17 @@ export function CompanyShell({
   contacts,
   activity,
   sends = [],
+  tasks = [],
+  agentRuns = [],
+  peers = [],
 }: {
   company: CompanyRow;
   contacts: CompanyContactRow[];
   activity: CompanyActivityRow[];
   sends?: CompanySendRow[];
+  tasks?: TaskItem[];
+  agentRuns?: any[];
+  peers?: PeerCompany[];
 }) {
   const [tab, setTab] = React.useState<Tab>("overview");
   const [leftOpen, setLeftOpen] = React.useState(true);
@@ -241,13 +250,35 @@ export function CompanyShell({
         />
 
         <div style={{ padding: "24px 32px 40px" }}>
-          {tab === "overview" && <OverviewPanel company={company} contacts={contacts} activity={activity} />}
+          {tab === "overview" && (
+            <RealOverviewPanel
+              company={company}
+              contacts={contacts as any}
+              activity={activity as any}
+              tasks={tasks}
+              agentRuns={agentRuns}
+            />
+          )}
           {tab === "biography" && <BiographyPanel company={company} />}
           {tab === "contacts" && <RealContactsPanel company={company} contacts={contacts} />}
           {tab === "engagement" && <RealEngagementPanel company={company} contacts={contacts} activity={activity} sends={sends} />}
           {tab === "dealflow" && <RealDealFlowPanel company={company} contacts={contacts} activity={activity} sends={sends} />}
-          {tab === "connections" && <ConnectionsPanel company={company} />}
-          {tab === "journal" && <JournalPanel company={company} />}
+          {tab === "connections" && (
+            <RealConnectionsPanel
+              company={company}
+              peers={peers}
+              contactCount={contacts.length}
+              activityCount={activity.length}
+              keyContactCount={contacts.filter((c: any) => Array.isArray(c.key_contact) && c.key_contact.length > 0).length}
+              hasPipelineData={!!company.rank_stage}
+            />
+          )}
+          {tab === "journal" && (
+            <RealJournalPanel
+              company={company}
+              entries={(activity as any).filter((a: any) => a.kind === "note")}
+            />
+          )}
         </div>
       </section>
     </div>
