@@ -3,6 +3,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { ContactsPanel as RealContactsPanel } from "./contacts-panel";
+import { CompanyEngagementPanel as RealEngagementPanel } from "./engagement-panel";
 
 // --- Types ---------------------------------------------------------------
 
@@ -229,7 +230,7 @@ export function CompanyShell({
           {tab === "overview" && <OverviewPanel company={company} contacts={contacts} activity={activity} />}
           {tab === "biography" && <BiographyPanel company={company} />}
           {tab === "contacts" && <RealContactsPanel company={company} contacts={contacts} />}
-          {tab === "engagement" && <EngagementPanel company={company} contacts={contacts} activity={activity} sends={sends} />}
+          {tab === "engagement" && <RealEngagementPanel company={company} contacts={contacts} activity={activity} sends={sends} />}
           {tab === "dealflow" && <DealFlowPanel company={company} />}
           {tab === "connections" && <ConnectionsPanel company={company} />}
           {tab === "journal" && <JournalPanel company={company} />}
