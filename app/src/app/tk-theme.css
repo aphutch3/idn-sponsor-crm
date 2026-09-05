@@ -218,8 +218,8 @@ a { color: inherit; text-decoration: none; }
 .tk-rail-collapsed span { writing-mode: vertical-rl; transform: rotate(180deg); }
 
 .tk-collapse-btn {
-  position: absolute;
-  top: 14px;
+  position: fixed;
+  top: calc(var(--tk-nav-h, 56px) + 14px);
   z-index: 30;
   width: 24px; height: 24px;
   border-radius: 50%;

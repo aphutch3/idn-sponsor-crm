@@ -148,6 +148,9 @@ function ChannelTabs({
         gap: 4,
         borderBottom: "1px solid var(--tk-border)",
         alignItems: "stretch",
+        background: "var(--tk-bg-muted, #f4f4f4)",
+        padding: "0 8px",
+        borderRadius: "8px 8px 0 0",
       }}
     >
       {tabs.map((t) => {
@@ -163,10 +166,15 @@ function ChannelTabs({
               alignItems: "center",
               gap: 10,
               padding: "10px 16px",
-              background: "transparent",
+              background: isActive ? "white" : "transparent",
               border: "none",
+              borderTop: isActive ? "1px solid var(--tk-border)" : "1px solid transparent",
+              borderLeft: isActive ? "1px solid var(--tk-border)" : "1px solid transparent",
+              borderRight: isActive ? "1px solid var(--tk-border)" : "1px solid transparent",
               borderBottom: isActive ? `2px solid ${t.accent}` : "2px solid transparent",
+              borderRadius: "6px 6px 0 0",
               marginBottom: -1,
+              marginTop: 6,
               cursor: "pointer",
               color: isActive ? "var(--tk-text)" : "var(--tk-text-muted)",
               fontWeight: isActive ? 600 : 500,
