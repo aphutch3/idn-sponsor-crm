@@ -20,8 +20,9 @@ const TIERS: Tier[] = [
 function tierFor(title: string | null | undefined): Tier {
   const t = (title || "").toLowerCase();
   if (!t) return TIERS[5];
+  // VP variants first so "Vice President" doesn't get grabbed by the C-suite president match
+  if (/\b(svp|evp|vp|vice president|senior vice president|executive vice president)\b/.test(t)) return TIERS[1];
   if (/\b(ceo|cto|cfo|cmo|coo|cio|cso|cro|cpo|cdo|cxo|chief|founder|co-?founder|owner|president|managing partner|managing director)\b/.test(t)) return TIERS[0];
-  if (/\b(vp|vice president|svp|evp|senior vice president|executive vice president)\b/.test(t)) return TIERS[1];
   if (/\b(director|head of|group lead|principal|partner)\b/.test(t)) return TIERS[2];
   if (/\b(manager|lead|supervisor)\b/.test(t)) return TIERS[3];
   if (/\b(engineer|analyst|specialist|associate|coordinator|representative|account|consultant|designer|writer|editor|producer|architect|scientist|developer|marketer|strategist|planner)\b/.test(t)) return TIERS[4];
