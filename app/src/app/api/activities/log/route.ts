@@ -22,8 +22,9 @@ const ALLOWED_KINDS = new Set([
 export async function POST(req: NextRequest) {
   let payload: any = {};
   try { payload = await req.json(); } catch {}
-  const { contact_id, kind, subject, body, meta } = payload;
-  if (!contact_id || !kind) return NextResponse.json({ error: "contact_id and kind required" }, { status: 400 });
+  const { contact_id, company_id: company_id_in, kind, subject, body, meta } = payload;
+  if (!kind) return NextResponse.json({ error: "kind required" }, { status: 400 });
+  if (!contact_id && !company_id_in) return NextResponse.json({ error: "contact_id or company_id required" }, { status: 400 });
   if (!ALLOWED_KINDS.has(kind)) return NextResponse.json({ error: `kind must be one of: ${[...ALLOWED_KINDS].join(", ")}` }, { status: 400 });
 
   let write;
@@ -32,11 +33,15 @@ export async function POST(req: NextRequest) {
   }
 
   // Look up the contact's company so activity is linked on both sides.
-  const { data: contact } = await write.from("contacts").select("company_id").eq("id", contact_id).maybeSingle();
+  let company_id: string | null = company_id_in || null;
+  if (contact_id) {
+    const { data: contact } = await write.from("contacts").select("company_id").eq("id", contact_id).maybeSingle();
+    if (contact?.company_id) company_id = contact.company_id;
+  }
 
   const { data, error } = await write.from("activities").insert({
-    contact_id,
-    company_id: contact?.company_id || null,
+    contact_id: contact_id || null,
+    company_id,
     kind,
     subject: subject || null,
     body: body || null,

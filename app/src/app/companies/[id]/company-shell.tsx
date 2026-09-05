@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui";
 import { ContactsPanel as RealContactsPanel } from "./contacts-panel";
 import { CompanyEngagementPanel as RealEngagementPanel } from "./engagement-panel";
+import { DealFlowPanel as RealDealFlowPanel } from "./dealflow-panel";
 
 // --- Types ---------------------------------------------------------------
 
@@ -31,6 +32,19 @@ export type CompanyRow = {
   hs_create_date: string | null;
   logo_url?: string | null;
   description?: string | null;
+  // Pipeline / deal-flow fields (all live on companies row today)
+  rank_stage?: string | null;
+  rank_last_year?: number | null;
+  rank_frequency?: string | null;
+  sponsor_tier_rank?: number | null;
+  keep?: string | null;
+  stay_on_top?: boolean | null;
+  is_customer?: boolean | null;
+  total_revenue?: number | null;
+  conferences?: string[] | null;
+  conference_speaking?: string[] | null;
+  activity?: string[] | null;
+  blockers_count?: number | null;
 };
 
 export type CompanyContactRow = {
@@ -231,7 +245,7 @@ export function CompanyShell({
           {tab === "biography" && <BiographyPanel company={company} />}
           {tab === "contacts" && <RealContactsPanel company={company} contacts={contacts} />}
           {tab === "engagement" && <RealEngagementPanel company={company} contacts={contacts} activity={activity} sends={sends} />}
-          {tab === "dealflow" && <DealFlowPanel company={company} />}
+          {tab === "dealflow" && <RealDealFlowPanel company={company} contacts={contacts} activity={activity} sends={sends} />}
           {tab === "connections" && <ConnectionsPanel company={company} />}
           {tab === "journal" && <JournalPanel company={company} />}
         </div>
