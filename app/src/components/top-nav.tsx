@@ -33,7 +33,7 @@ export function TopNav() {
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Link className="tk-btn tk-btn-sm tk-btn-accent" href="/agents">Agents</Link>
+        <Link className="tk-btn tk-btn-sm tk-btn-accent" href="/agents" style={{ color: "#111318" }}>Agents</Link>
         <Link className="tk-btn tk-btn-sm tk-btn-ghost" style={{ borderColor: "#374151", color: "white" }} href="/insights">
           Insights
         </Link>
