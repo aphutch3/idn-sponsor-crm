@@ -33,7 +33,7 @@ const FALLBACK_GROUPS: Group[] = [
   {
     label: "Marketing",
     apps: [
-      { name: "IDN Web Site", viewUrl: "https://idn-webiste.pplx.app/", devUrl: dev("95354829-84e2-4eec-adf8-1be93ff27888") },
+      { name: "IDN Web Site", viewUrl: "https://idn-webiste.pplx.app/", devUrl: dev("c8e11cb7-dff4-4580-9c05-15e3fdb59e50") },
       { name: "IDN MMS", viewUrl: "https://idn-mms.vercel.app/dashboard", devUrl: dev("f45e10e1-2e7e-4370-b5a9-34d2e743bf1e") },
       {
         name: "IDN PPC & Clicks",
