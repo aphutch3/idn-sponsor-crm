@@ -263,6 +263,7 @@ export function AppSwitcher() {
                             title={`Open ${app.name}`}
                             aria-label={`Open ${app.name}`}
                             className="app-switcher-btn app-switcher-btn-view"
+                            style={{ color: "#ffffff", background: "#111318", fontWeight: 900 }}
                           >
                             V
                           </a>
@@ -275,6 +276,7 @@ export function AppSwitcher() {
                               title={`Continue building ${app.name}`}
                               aria-label={`Continue building ${app.name}`}
                               className="app-switcher-btn app-switcher-btn-dev"
+                              style={{ color: "#000000", background: "var(--tk-lime)", fontWeight: 900 }}
                             >
                               D
                             </a>
@@ -283,6 +285,7 @@ export function AppSwitcher() {
                               className="app-switcher-btn app-switcher-btn-empty"
                               title="No dev session linked yet"
                               aria-label="No dev session"
+                              style={{ color: "var(--tk-text-muted)", fontWeight: 900 }}
                             >
                               D
                             </span>
