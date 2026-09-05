@@ -134,7 +134,7 @@ export function AppSwitcher() {
             position: "fixed",
             top: 62,
             right: 12,
-            width: "min(1180px, calc(100vw - 24px))",
+            width: "min(1360px, calc(100vw - 24px))",
             background: "white",
             border: "1px solid var(--tk-border)",
             borderRadius: 12,
@@ -298,7 +298,7 @@ export function AppSwitcher() {
           align-items: center;
           justify-content: center;
           height: 22px;
-          padding: 0 8px;
+          padding: 0 9px;
           border-radius: 5px;
           font-size: 10px;
           font-weight: 700;
