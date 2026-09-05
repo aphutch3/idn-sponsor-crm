@@ -52,8 +52,7 @@ const GROUPS: Group[] = [
   {
     label: "Content",
     apps: [
-      // IDN News Dashboard: no matching wiki session — leave unset until confirmed
-      { name: "IDN News Dashboard", viewUrl: "https://tldr-dashboard-rho.vercel.app/#/" },
+      { name: "IDN News Dashboard", viewUrl: "https://tldr-dashboard-rho.vercel.app/#/", devUrl: dev("9b1c3389-7cc7-42d6-89e7-cdb117a46dc0") },
       {
         name: "IDN Signals",
         viewUrl: "https://www.perplexity.ai/computer/a/22a557b1-0286-4190-bb20-25788a39b1c6",
@@ -331,9 +330,10 @@ export function AppSwitcher() {
           border-color: #1f2937;
         }
         :global(.app-switcher-btn-dev) {
-          color: #111318;
+          color: #000000;
           background: var(--tk-lime);
           border-color: var(--tk-lime-strong);
+          font-weight: 900;
         }
         :global(.app-switcher-btn-dev:hover) {
           background: var(--tk-lime-strong);
