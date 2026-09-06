@@ -16,7 +16,6 @@ const NAV = [
 
 export function TopNav() {
   const pathname = usePathname();
-  const engagerActive = pathname === "/engager" || pathname.startsWith("/engager/") || pathname.startsWith("/campaigns");
   return (
     <nav className="tk-nav">
       <div className="flex items-center gap-8">
@@ -32,9 +31,7 @@ export function TopNav() {
               </Link>
             );
           })}
-          <span className={engagerActive ? "active" : ""}>
-            <EngagerSwitcher />
-          </span>
+          <EngagerSwitcher />
         </div>
       </div>
       <div className="flex items-center gap-3">

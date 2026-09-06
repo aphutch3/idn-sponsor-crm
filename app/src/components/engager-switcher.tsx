@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type SpeedLink = {
   label: string;
@@ -199,6 +200,8 @@ function AppTile({ app, onNavigate }: { app: SubApp; onNavigate: () => void }) {
 export function EngagerSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const pathname = usePathname();
+  const routeActive = pathname === "/engager" || pathname.startsWith("/engager/");
 
   useEffect(() => {
     if (!open) return;
@@ -222,31 +225,42 @@ export function EngagerSwitcher() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label="Engager sub-apps"
-        style={{
-          background: "transparent",
-          border: "none",
-          color: "inherit",
-          cursor: "pointer",
-          font: "inherit",
-          padding: 0,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-        }}
+        className={`tk-nav-trigger${open || routeActive ? " active" : ""}`}
       >
         <span>Engager</span>
         <span
+          aria-hidden
           style={{
             display: "inline-block",
             transform: open ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 120ms ease",
             fontSize: 9,
             lineHeight: 1,
+            marginLeft: 4,
           }}
         >
           ▼
         </span>
       </button>
+      <style jsx>{`
+        .tk-nav-trigger {
+          background: transparent;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          color: var(--tk-nav-fg, #ffffff);
+          font-family: inherit;
+          font-weight: 500;
+          font-size: 14px;
+          line-height: 1;
+          display: inline-flex;
+          align-items: center;
+        }
+        .tk-nav-trigger:hover,
+        .tk-nav-trigger.active {
+          color: var(--tk-lime);
+        }
+      `}</style>
 
       {open && (
         <div
