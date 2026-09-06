@@ -23,8 +23,8 @@ export default function NewCampaignPage() {
   return (
     <div className="p-8 max-w-3xl">
       <div className="flex items-center gap-2 text-xs text-muted mb-3">
-        <Link href="/campaigns" className="hover:text-strong">
-          Campaigns
+        <Link href="/engager/email" className="hover:text-strong">
+          Email Manager
         </Link>
         <span>/</span>
         <span className="text-strong">New</span>
@@ -116,13 +116,13 @@ export default function NewCampaignPage() {
 
       <div className="flex items-center justify-end gap-2">
         <Link
-          href="/campaigns"
+          href="/engager/email"
           className="text-xs px-4 py-2 rounded-md border border-strong hover:bg-subtle/40"
         >
           Cancel
         </Link>
         <Link
-          href="/campaigns/c_new"
+          href="/engager/email/c_new"
           className="text-xs px-4 py-2 rounded-md bg-black text-white font-medium"
         >
           Continue → Content

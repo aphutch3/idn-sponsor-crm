@@ -14,5 +14,11 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      { source: "/campaigns", destination: "/engager/email", permanent: false },
+      { source: "/campaigns/:path*", destination: "/engager/email/:path*", permanent: false },
+    ];
+  },
 };
 export default nextConfig;

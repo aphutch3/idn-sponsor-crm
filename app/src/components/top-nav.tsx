@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppSwitcher } from "./app-switcher";
+import { EngagerSwitcher } from "./engager-switcher";
 
 // Matches the .tk-nav bar from idn-skill-platform.
 const NAV = [
@@ -11,18 +12,18 @@ const NAV = [
   { href: "/companies", label: "Companies" },
   { href: "/contacts", label: "Contacts" },
   { href: "/pipeline", label: "Pipeline" },
-  { href: "/campaigns", label: "Campaigns" },
 ];
 
 export function TopNav() {
   const pathname = usePathname();
+  const engagerActive = pathname === "/engager" || pathname.startsWith("/engager/") || pathname.startsWith("/campaigns");
   return (
     <nav className="tk-nav">
       <div className="flex items-center gap-8">
         <Link href="/" className="tk-editorial text-white" style={{ fontSize: 22 }}>
           IDN · The Engager
         </Link>
-        <div className="hidden md:flex gap-6">
+        <div className="hidden md:flex gap-6 items-center">
           {NAV.map(item => {
             const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             return (
@@ -31,6 +32,9 @@ export function TopNav() {
               </Link>
             );
           })}
+          <span className={engagerActive ? "active" : ""}>
+            <EngagerSwitcher />
+          </span>
         </div>
       </div>
       <div className="flex items-center gap-3">

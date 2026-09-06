@@ -128,13 +128,13 @@ export default async function CampaignsPage() {
   return (
     <div className="p-8 max-w-6xl">
       <PageHeader
-        title="Campaigns"
+        title="Email Manager"
         subtitle="Segment-driven Resend campaigns · agent-drafted, human-approved"
         right={
           <div className="flex items-center gap-2">
             <Badge tone="warn">Skeleton · Resend not wired</Badge>
             <Link
-              href="/campaigns/new"
+              href="/engager/email/new"
               className="inline-flex items-center gap-2 rounded-md bg-black text-white text-xs font-medium px-3 py-2 hover:opacity-90"
             >
               + New Campaign
@@ -197,7 +197,7 @@ export default async function CampaignsPage() {
         {campaigns.map((c) => (
           <Link
             key={c.id}
-            href={`/campaigns/${c.id}`}
+            href={`/engager/email/${c.id}`}
             className="grid grid-cols-[2.2fr_1.4fr_100px_90px_90px_90px_110px] gap-3 items-center px-4 py-3 border-b border-subtle last:border-b-0 hover:bg-subtle/40 transition-colors"
           >
             <div className="min-w-0">

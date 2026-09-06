@@ -25,7 +25,7 @@ export function SiteFooter() {
         </div>
         <div>
           <h4>Reach</h4>
-          <Link href="/campaigns">Campaigns</Link>
+          <Link href="/engager">Engager</Link>
           <Link href="/agents">Agents</Link>
           <Link href="/insights">Insights</Link>
         </div>

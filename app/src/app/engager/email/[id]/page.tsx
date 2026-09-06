@@ -91,8 +91,8 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   return (
     <div className="p-8 max-w-6xl">
       <div className="flex items-center gap-2 text-xs text-muted mb-3">
-        <Link href="/campaigns" className="hover:text-strong">
-          Campaigns
+        <Link href="/engager/email" className="hover:text-strong">
+          Email Manager
         </Link>
         <span>/</span>
         <span className="text-strong">{c.name}</span>
