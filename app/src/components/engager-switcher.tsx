@@ -17,8 +17,8 @@ type SubApp = {
 };
 
 // 4 columns x 2 rows, per the paste:
-//   Row 1: Overview, Campaigner, Email Manager, Surveyor
-//   Row 2: Builder,  Asset Manager, Ad Manager, Video Channels
+//   Row 1: Overview, Campaigner, Email Manager, Builder & Assets
+//   Row 2: Social Engager, Surveyor, Ad Manager, Video Channels
 const ROW_1: SubApp[] = [
   {
     slug: "",
@@ -54,6 +54,31 @@ const ROW_1: SubApp[] = [
     ],
   },
   {
+    slug: "builder",
+    name: "Builder & Assets",
+    tagline: "Pages + emails + brand inventory",
+    status: "planned",
+    speedLinks: [
+      { label: "New landing page", href: "/engager/builder/landing" },
+      { label: "Brand kit", href: "/engager/builder/brand" },
+      { label: "Content library", href: "/engager/builder/content" },
+    ],
+  },
+];
+
+const ROW_2: SubApp[] = [
+  {
+    slug: "social",
+    name: "Social Engager",
+    tagline: "X, LinkedIn, YouTube reach",
+    status: "planned",
+    speedLinks: [
+      { label: "New post", href: "/engager/social/new" },
+      { label: "Schedule", href: "/engager/social?tab=schedule" },
+      { label: "Mentions & replies", href: "/engager/social?tab=inbox" },
+    ],
+  },
+  {
     slug: "surveyor",
     name: "Surveyor",
     tagline: "Sponsor & attendee surveys",
@@ -62,31 +87,6 @@ const ROW_1: SubApp[] = [
       { label: "New survey", href: "/engager/surveyor/new" },
       { label: "Live surveys", href: "/engager/surveyor?tab=live" },
       { label: "Response library", href: "/engager/surveyor?tab=responses" },
-    ],
-  },
-];
-
-const ROW_2: SubApp[] = [
-  {
-    slug: "builder",
-    name: "Builder",
-    tagline: "Landing pages, emails, agent-driven",
-    status: "planned",
-    speedLinks: [
-      { label: "New landing page", href: "/engager/builder/landing" },
-      { label: "New email template", href: "/engager/builder/email" },
-      { label: "Design guide", href: "/engager/builder/design" },
-    ],
-  },
-  {
-    slug: "assets",
-    name: "Asset Manager",
-    tagline: "Brand & content inventory",
-    status: "planned",
-    speedLinks: [
-      { label: "Brand kit", href: "/engager/assets/brand" },
-      { label: "Content library", href: "/engager/assets/content" },
-      { label: "Upload", href: "/engager/assets/upload" },
     ],
   },
   {
@@ -288,7 +288,7 @@ export function EngagerSwitcher() {
               </div>
             </div>
             <div style={{ fontSize: 11, color: "var(--tk-text-muted)" }}>
-              Overview · Campaigner · Email · Surveyor · Builder · Assets · Ads · Video
+              Overview · Campaigner · Email · Builder & Assets · Social · Surveyor · Ads · Video
             </div>
           </div>
 

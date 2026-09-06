@@ -19,6 +19,7 @@ const RECENT = [
   { channel: "Email",    campaign: "Deploy Summit sponsor survey",         when: "draft",       metric: "214 recipients queued",   href: "/engager/email/c_2026_09_deploy_survey" },
   { channel: "Video",    campaign: "A3 Summit — session highlight reel",   when: "planned",     metric: "12 clips in queue",       href: "/engager/video" },
   { channel: "Surveyor", campaign: "Post-summit sponsor NPS",              when: "planned",     metric: "template ready",          href: "/engager/surveyor" },
+  { channel: "Social",   campaign: "A3 Summit — LinkedIn drumbeat",         when: "planned",     metric: "6 posts queued",          href: "/engager/social" },
 ];
 
 function statusTone(s: "live" | "skeleton" | "planned") {
@@ -47,7 +48,7 @@ export default function EngagerOverviewPage() {
         <Stat label="Total sent" value={fmtNum(totalSent)} sub="across all channels" />
         <Stat label="Engaged" value={fmtNum(totalEngaged)} sub="opens · clicks · responses" />
         <Stat label="Engagement rate" value={typeof engagementRate === "string" && engagementRate !== "—" ? `${engagementRate}%` : "—"} sub="engaged / sent" />
-        <Stat label="Active channels" value={`${liveChannels} / ${CHANNELS.length}`} sub="live or skeleton" accent />
+        <Stat label="Channels tracked" value={`${liveChannels} / ${CHANNELS.length}`} sub="live or skeleton" accent />
       </div>
 
       {/* Channel breakdown */}
