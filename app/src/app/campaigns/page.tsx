@@ -185,20 +185,20 @@ export default async function CampaignsPage() {
 
       {/* Campaign list */}
       <Card padded={false}>
-        <div className="grid grid-cols-[2.2fr_1.4fr_100px_90px_90px_90px_100px] text-[11px] uppercase tracking-wider text-muted border-b border-subtle px-4 py-2.5 bg-subtle/40">
+        <div className="grid grid-cols-[2.2fr_1.4fr_100px_90px_90px_90px_110px] gap-3 text-[11px] uppercase tracking-wider text-muted border-b border-subtle px-4 py-2.5 bg-subtle/40">
           <div>Campaign</div>
           <div>Audience</div>
           <div className="text-right">Sent</div>
           <div className="text-right">Open %</div>
           <div className="text-right">Click %</div>
           <div className="text-right">Reply</div>
-          <div>Status</div>
+          <div className="text-right">Status</div>
         </div>
         {campaigns.map((c) => (
           <Link
             key={c.id}
             href={`/campaigns/${c.id}`}
-            className="grid grid-cols-[2.2fr_1.4fr_100px_90px_90px_90px_100px] items-center px-4 py-3 border-b border-subtle last:border-b-0 hover:bg-subtle/40 transition-colors"
+            className="grid grid-cols-[2.2fr_1.4fr_100px_90px_90px_90px_110px] gap-3 items-center px-4 py-3 border-b border-subtle last:border-b-0 hover:bg-subtle/40 transition-colors"
           >
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{c.name}</div>
@@ -212,7 +212,7 @@ export default async function CampaignsPage() {
             <div className="text-right mono text-sm">{pct(c.opens, c.sent)}</div>
             <div className="text-right mono text-sm">{pct(c.clicks, c.sent)}</div>
             <div className="text-right mono text-sm">{c.replies ?? "—"}</div>
-            <div>
+            <div className="text-right">
               <Badge tone={statusTone(c.status)}>{c.status}</Badge>
             </div>
           </Link>
