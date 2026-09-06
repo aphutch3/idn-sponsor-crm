@@ -24,7 +24,7 @@ const FALLBACK_GROUPS: Group[] = [
   {
     label: "Sales",
     apps: [
-      { name: "IDN CRM", viewUrl: "https://idn-sponsor-crm.vercel.app/", devUrl: dev("a156a188-a9bc-474f-b0c8-59ee574a8b75") },
+      { name: "IDN · The Engager", viewUrl: "https://idn-sponsor-crm.vercel.app/", devUrl: dev("a156a188-a9bc-474f-b0c8-59ee574a8b75") },
       { name: "Audience List", viewUrl: "https://idn-list-campaigns.vercel.app/", devUrl: dev("89cb2977-6547-4e4b-81c9-ac75814d3322") },
       { name: "Crunchbase Clone", viewUrl: "https://ai-layers-intelligence.vercel.app/", devUrl: dev("f9140e2e-d11d-42e8-857b-3a95e6b857b2") },
       { name: "Survey Monkey Clone", viewUrl: "https://idn-surveys.vercel.app/", devUrl: dev("39e947f8-0bef-45f2-b555-0fc6cb77a670") },

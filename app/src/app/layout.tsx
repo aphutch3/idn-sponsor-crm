@@ -4,7 +4,7 @@ import { TopNav } from "@/components/top-nav";
 import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
-  title: "IDN Sponsor CRM",
+  title: "IDN · The Engager",
   description: "Agent-driven sponsor pursuit — companies, contacts, and outreach for IDN summits.",
 };
 

@@ -5,7 +5,7 @@ export function SiteFooter() {
     <footer className="tk-footer">
       <div className="tk-footer-inner">
         <div>
-          <div className="tk-footer-brand">IDN Sponsor CRM</div>
+          <div className="tk-footer-brand">IDN · The Engager</div>
           <p className="text-sm" style={{ color: "#9ca3af" }}>
             Agent-driven sponsor pursuit for IDN summit programming. Companies, contacts, activity,
             and outreach in one governed workspace.

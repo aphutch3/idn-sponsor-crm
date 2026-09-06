@@ -20,7 +20,7 @@ export function TopNav() {
     <nav className="tk-nav">
       <div className="flex items-center gap-8">
         <Link href="/" className="tk-editorial text-white" style={{ fontSize: 22 }}>
-          IDN Sponsor CRM
+          IDN · The Engager
         </Link>
         <div className="hidden md:flex gap-6">
           {NAV.map(item => {
