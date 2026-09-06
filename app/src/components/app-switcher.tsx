@@ -28,6 +28,7 @@ const FALLBACK_GROUPS: Group[] = [
       { name: "Audience List", viewUrl: "https://idn-list-campaigns.vercel.app/", devUrl: dev("89cb2977-6547-4e4b-81c9-ac75814d3322") },
       { name: "Crunchbase Clone", viewUrl: "https://ai-layers-intelligence.vercel.app/", devUrl: dev("f9140e2e-d11d-42e8-857b-3a95e6b857b2") },
       { name: "Survey Monkey Clone", viewUrl: "https://idn-surveys.vercel.app/", devUrl: dev("39e947f8-0bef-45f2-b555-0fc6cb77a670") },
+      { name: "Event Systems", viewUrl: "https://idn-events-app.vercel.app/#/events", devUrl: dev("6ff40b25-548c-4f1a-9ed6-e3f095c16cf4") },
     ],
   },
   {
