@@ -1,13 +1,12 @@
 import Link from "next/link";
+import { admin } from "@/lib/supabase";
 import { PageHeader, Card, Stat, Badge } from "@/components/ui";
 import { fmtNum } from "@/lib/utils";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
-// Influencers Overview aggregates activity across every cohort.
-// Stub data — real numbers land when each cohort is wired to Supabase.
-const COHORTS = [
-  { key: "speakers",       name: "Event Speakers",  count: 138, active: 24, status: "planned" as const, href: "/influencers/speakers" },
+// Cohort placeholders — replaced with live counts as each cohort ships.
+const COHORTS_STATIC = [
   { key: "socializers",    name: "Socializers",     count: 214, active: 61, status: "planned" as const, href: "/influencers/socializers" },
   { key: "evangelists",    name: "Evangelists",     count: 87,  active: 19, status: "planned" as const, href: "/influencers/evangelists" },
   { key: "open-standards", name: "Open Standards",  count: 42,  active: 8,  status: "planned" as const, href: "/influencers/open-standards" },
@@ -27,7 +26,16 @@ function statusTone(s: "live" | "skeleton" | "planned") {
   return "muted" as const;
 }
 
-export default function InfluencersOverviewPage() {
+export default async function InfluencersOverviewPage() {
+  const db = admin();
+  const { count: speakerCount } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]);
+  const { count: speakerActive } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]).eq("lead_status", "Open");
+
+  const COHORTS = [
+    { key: "speakers", name: "Event Speakers", count: speakerCount || 0, active: speakerActive || 0, status: "live" as const, href: "/influencers/speakers" },
+    ...COHORTS_STATIC,
+  ];
+
   const totalPeople = COHORTS.reduce((s, c) => s + c.count, 0);
   const totalActive = COHORTS.reduce((s, c) => s + c.active, 0);
   const activeRate = totalPeople > 0 ? ((totalActive / totalPeople) * 100).toFixed(0) : "—";

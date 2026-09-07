@@ -35,7 +35,7 @@ const ROW_1: SubApp[] = [
     slug: "speakers",
     name: "Event Speakers",
     tagline: "Past + prospective summit speakers",
-    status: "planned",
+    status: "live",
     speedLinks: [
       { label: "Speaker roster", href: "/influencers/speakers?tab=roster" },
       { label: "Prospects", href: "/influencers/speakers?tab=prospects" },
