@@ -29,18 +29,35 @@ const WATCHLIST = [
   { handle: "@svpino",         name: "Santiago",               platform: "X" as const,        followers: 168000, topics: ["ML","MLOps","Careers"],                             url: "https://x.com/svpino",         priority: "medium" as const },
 ];
 
-// Recent mentions feed — stub until X CLI wired to Supabase cache.
-// Once wired: cron job runs `xurl` searches for IDN topics and inserts rows.
-const RECENT_MENTIONS = [
-  { platform: "X" as const,        handle: "@simonw",          when: "2h ago",  snippet: "Tool use in Claude 4 Opus is genuinely different — the model plans multi-step calls without needing you to hand-hold each hop.",           reach: 41000, topic: "LLM tooling" },
-  { platform: "LinkedIn" as const, handle: "ashley-willis",    when: "4h ago",  snippet: "Copilot workspace changed how our team scopes issues before writing a line of code. Preview → PR feels like a completely new loop.",       reach: 8800,  topic: "Copilot" },
-  { platform: "X" as const,        handle: "@GergelyOrosz",    when: "6h ago",  snippet: "The tech debt survey I ran with 2k+ engineers landed. AI coding tools rank as the #2 cause of new debt behind rushed feature work.",       reach: 92000, topic: "Tech debt" },
-  { platform: "X" as const,        handle: "@mipsytipsy",      when: "9h ago",  snippet: "If your observability spend went up 40% after adding AI features, that's not observability breaking — that's you finally seeing costs.", reach: 18000, topic: "Observability" },
-  { platform: "YouTube" as const,  handle: "@fireship_dev",    when: "1d ago",  snippet: "Nanochat in 100 seconds — Karpathy's tiny LLM stack that runs the whole training loop on a single H100.",                                reach: 340000,topic: "LLM education" },
-  { platform: "X" as const,        handle: "@rauchg",          when: "1d ago",  snippet: "Server components + streaming let LLM apps feel synchronous even when they're not. This is the pattern for AI UX in 2026.",                reach: 78000, topic: "Frontend AI" },
-  { platform: "X" as const,        handle: "@kelseyhightower", when: "2d ago",  snippet: "Platform engineering isn't about giving developers more tools. It's about giving them fewer decisions.",                                  reach: 54000, topic: "Platform" },
-  { platform: "X" as const,        handle: "@ashtom",          when: "2d ago",  snippet: "Copilot chat inside the pull request UI is quietly the biggest workflow shift GitHub has shipped this year.",                             reach: 22000, topic: "Copilot" },
-];
+// Recent mentions are now live from the social_mentions table — populated by
+// scripts/refresh_social_mentions.py on a 6h cron.
+type Mention = {
+  id: string;
+  platform: "X" | "LinkedIn" | "YouTube";
+  author_username: string | null;
+  author_name: string | null;
+  text: string;
+  url: string | null;
+  topic: string | null;
+  reach_score: number;
+  posted_at: string;
+  impression_count: number;
+  like_count: number;
+};
+
+function timeAgo(iso: string) {
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
 
 type Platform = "X" | "LinkedIn" | "YouTube";
 
@@ -86,6 +103,19 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
   const totalReach = WATCHLIST.reduce((s, w) => s + w.followers, 0);
   const highPriority = WATCHLIST.filter((w) => w.priority === "high").length;
 
+  // Live recent mentions from social_mentions (populated by 6h xurl cron)
+  const { data: mentions } = await db.from("social_mentions")
+    .select("id, platform, author_username, author_name, text, url, topic, reach_score, posted_at, impression_count, like_count")
+    .order("posted_at", { ascending: false })
+    .limit(25);
+
+  // Latest refresh log entry for the "last synced" indicator
+  const { data: lastLog } = await db.from("social_refresh_log")
+    .select("ran_at, posts_inserted, queries_run")
+    .order("id", { ascending: false })
+    .limit(1)
+    .single();
+
   // Filter for platform tab
   const byPlatform = platformFilter === "all"
     ? WATCHLIST
@@ -122,7 +152,7 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
       {/* Tabs */}
       <div className="flex gap-2 mt-8 border-b border-subtle">
         <TabLink label="Top reach"    tab="reach"    current={tab} count={WATCHLIST.length} />
-        <TabLink label="Recent posts" tab="posts"    current={tab} count={RECENT_MENTIONS.length} />
+        <TabLink label="Recent posts" tab="posts"    current={tab} count={mentions?.length || 0} />
         <TabLink label="By platform"  tab="platform" current={tab} count={3} />
       </div>
 
@@ -200,29 +230,51 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
       {tab === "posts" && (
         <div className="mt-6">
           <div className="flex items-baseline justify-between mb-4">
-            <div className="text-xs text-muted">Recent posts from the watchlist tagged with IDN topics. Live X search wires to the xurl CLI in the next iteration — for now this feed is representative.</div>
-            <div className="text-xs text-muted">Last synced: 2h ago (stub)</div>
+            <div className="text-xs text-muted">Live X posts matching IDN topic searches, refreshed every 6 hours by <code className="mono">refresh_social_mentions.py</code>. Ranked by recency; use By platform tab for reach-ranked lists.</div>
+            <div className="text-xs text-muted">
+              {lastLog ? (
+                <>Last synced: {timeAgo(lastLog.ran_at)} · {lastLog.posts_inserted} posts · {lastLog.queries_run} queries</>
+              ) : "Never synced"}
+            </div>
           </div>
-          <Card padded={false}>
-            {RECENT_MENTIONS.map((m, i) => (
-              <div key={i} className="grid grid-cols-[110px_1fr_120px_90px] gap-4 px-4 py-4 border-b border-subtle last:border-b-0 items-start">
-                <div className="flex flex-col gap-1">
-                  <Badge tone={platformTone(m.platform)}>{m.platform}</Badge>
-                  <span className="text-xs text-muted mono">{m.handle}</span>
+          {(!mentions || mentions.length === 0) ? (
+            <Card>
+              <div className="text-sm text-muted">No mentions yet. Run <code className="mono">python3 scripts/refresh_social_mentions.py</code> or wait for the 6h cron.</div>
+            </Card>
+          ) : (
+            <Card padded={false}>
+              {(mentions as Mention[]).map((m) => (
+                <div key={m.id} className="grid grid-cols-[130px_1fr_130px_100px] gap-4 px-4 py-4 border-b border-subtle last:border-b-0 items-start">
+                  <div className="flex flex-col gap-1">
+                    <Badge tone={platformTone(m.platform)}>{m.platform}</Badge>
+                    {m.author_username && (
+                      <a href={m.url || `https://x.com/${m.author_username}`} target="_blank" rel="noreferrer" className="text-xs text-muted mono hover:text-accent">
+                        @{m.author_username}
+                      </a>
+                    )}
+                    {m.author_name && (
+                      <span className="text-[11px] text-muted truncate" title={m.author_name}>{m.author_name}</span>
+                    )}
+                  </div>
+                  <div className="text-sm leading-relaxed">
+                    {m.url ? (
+                      <a href={m.url} target="_blank" rel="noreferrer" className="hover:text-accent">{m.text}</a>
+                    ) : m.text}
+                  </div>
+                  <div className="text-xs">
+                    {m.topic && <Badge tone="muted">{m.topic}</Badge>}
+                  </div>
+                  <div className="text-right">
+                    <div className="mono text-sm">{fmtFollowers(m.impression_count || 0)}</div>
+                    <div className="text-[11px] text-muted">impressions</div>
+                    <div className="text-[11px] text-muted mt-1">{timeAgo(m.posted_at)}</div>
+                  </div>
                 </div>
-                <div className="text-sm leading-relaxed">{m.snippet}</div>
-                <div className="text-xs">
-                  <Badge tone="muted">{m.topic}</Badge>
-                </div>
-                <div className="text-right">
-                  <div className="mono text-sm">{fmtFollowers(m.reach)}</div>
-                  <div className="text-xs text-muted">{m.when}</div>
-                </div>
-              </div>
-            ))}
-          </Card>
+              ))}
+            </Card>
+          )}
           <div className="mt-4 p-3 border border-border rounded-md bg-subtle/40 text-xs text-muted">
-            <strong className="text-fg">Next:</strong> a cron will run xurl searches for topics like &ldquo;copilot&rdquo;, &ldquo;observability&rdquo;, &ldquo;platform engineering&rdquo; every 6 hours and insert real posts here.
+            <strong className="text-fg">Pipeline:</strong> xurl searches 8 IDN topic queries (Copilot, LLM tooling, Observability, Platform eng, AI coding, Tech debt, Frontend AI, Foundation models). Posts with ≥200 impressions are upserted into <code className="mono">social_mentions</code>. Reach score = impressions + likes×10 + retweets×30 + quotes×20 + replies×5.
           </div>
         </div>
       )}
