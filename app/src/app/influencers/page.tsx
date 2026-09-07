@@ -7,10 +7,12 @@ export const revalidate = 30;
 
 // Cohort placeholders — replaced with live counts as each cohort ships.
 const COHORTS_STATIC = [
-  { key: "socializers",    name: "Socializers",     count: 214, active: 61, status: "planned" as const, href: "/influencers/socializers" },
   { key: "evangelists",    name: "Evangelists",     count: 87,  active: 19, status: "planned" as const, href: "/influencers/evangelists" },
   { key: "open-standards", name: "Open Standards",  count: 42,  active: 8,  status: "planned" as const, href: "/influencers/open-standards" },
 ];
+
+// Socializers watchlist size mirrors the roster hardcoded in the socializers page.
+const SOCIALIZERS_WATCHLIST = 18;
 
 const RECENT = [
   { cohort: "Speakers",       person: "Kelsey Hightower",       when: "confirmed A3",       metric: "Q4 keynote candidate",       href: "/influencers/speakers" },
@@ -30,9 +32,12 @@ export default async function InfluencersOverviewPage() {
   const db = admin();
   const { count: speakerCount } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]);
   const { count: speakerActive } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]).eq("lead_status", "Open");
+  // Socializers = watchlist + FRIEND-tagged contacts with LinkedIn URLs
+  const { count: friendCount } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["FRIEND"]).not("linkedin_url", "is", null);
 
   const COHORTS = [
-    { key: "speakers", name: "Event Speakers", count: speakerCount || 0, active: speakerActive || 0, status: "live" as const, href: "/influencers/speakers" },
+    { key: "speakers",    name: "Event Speakers", count: speakerCount || 0,                          active: speakerActive || 0, status: "live" as const, href: "/influencers/speakers" },
+    { key: "socializers", name: "Socializers",    count: SOCIALIZERS_WATCHLIST + (friendCount || 0), active: SOCIALIZERS_WATCHLIST, status: "live" as const, href: "/influencers/socializers" },
     ...COHORTS_STATIC,
   ];
 

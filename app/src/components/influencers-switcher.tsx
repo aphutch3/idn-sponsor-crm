@@ -45,8 +45,8 @@ const ROW_1: SubApp[] = [
   {
     slug: "socializers",
     name: "Socializers",
-    tagline: "High-reach voices on X and LinkedIn",
-    status: "planned",
+    tagline: "High-reach voices on X, LinkedIn, YouTube",
+    status: "live",
     speedLinks: [
       { label: "Top reach", href: "/influencers/socializers?tab=reach" },
       { label: "Recent posts", href: "/influencers/socializers?tab=posts" },
