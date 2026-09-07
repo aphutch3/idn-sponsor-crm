@@ -2,6 +2,7 @@ import Link from "next/link";
 import { admin } from "@/lib/supabase";
 import { PageHeader, Badge, Stat, Card, TableShell } from "@/components/ui";
 import { fmtNum } from "@/lib/utils";
+import { RefreshMentionsButton } from "@/components/refresh-mentions-button";
 
 export const revalidate = 30;
 
@@ -229,12 +230,15 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
 
       {tab === "posts" && (
         <div className="mt-6">
-          <div className="flex items-baseline justify-between mb-4">
-            <div className="text-xs text-muted">Live X posts matching IDN topic searches, refreshed every 6 hours by <code className="mono">refresh_social_mentions.py</code>. Ranked by recency; use By platform tab for reach-ranked lists.</div>
-            <div className="text-xs text-muted">
-              {lastLog ? (
-                <>Last synced: {timeAgo(lastLog.ran_at)} · {lastLog.posts_inserted} posts · {lastLog.queries_run} queries</>
-              ) : "Never synced"}
+          <div className="flex items-start justify-between mb-4 gap-4">
+            <div className="text-xs text-muted max-w-2xl">Live X posts matching IDN topic searches, refreshed every 6 hours by <code className="mono">refresh_social_mentions.py</code>. Ranked by recency; use By platform tab for reach-ranked lists.</div>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <RefreshMentionsButton />
+              <div className="text-xs text-muted">
+                {lastLog ? (
+                  <>Last synced: {timeAgo(lastLog.ran_at)} · {lastLog.posts_inserted} posts · {lastLog.queries_run} queries</>
+                ) : "Never synced"}
+              </div>
             </div>
           </div>
           {(!mentions || mentions.length === 0) ? (
