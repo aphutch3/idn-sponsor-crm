@@ -7,10 +7,11 @@ export const revalidate = 30;
 
 export default async function SpeakerDetailPage({ params }: { params: { id: string } }) {
   const db = admin();
-  const { data: c } = await db.from("contacts")
-    .select("id, first_name, last_name, email, job_title, lead_status, emails_opened, emails_clicked, emails_replied, key_contact, phone, linkedin_url, twitter_url, notes, company_id, companies(id, name, industry, website)")
+  const { data: c, error } = await db.from("contacts")
+    .select("id, first_name, last_name, email, job_title, lead_status, emails_opened, emails_clicked, emails_replied, key_contact, phone, linkedin_url, company_id, companies(id, name, industry, website_url)")
     .eq("id", params.id)
     .maybeSingle();
+  if (error) console.error("speaker detail error", error);
 
   if (!c) return notFound();
   if (!(c.key_contact || []).includes("SPEAKER")) return notFound();
@@ -65,10 +66,7 @@ export default async function SpeakerDetailPage({ params }: { params: { id: stri
             {c.linkedin_url && (
               <div className="flex justify-between gap-3"><dt className="text-muted">LinkedIn</dt><dd><a href={c.linkedin_url} target="_blank" rel="noreferrer" className="text-xs hover:text-accent">Profile ↗</a></dd></div>
             )}
-            {c.twitter_url && (
-              <div className="flex justify-between gap-3"><dt className="text-muted">X / Twitter</dt><dd><a href={c.twitter_url} target="_blank" rel="noreferrer" className="text-xs hover:text-accent">Profile ↗</a></dd></div>
-            )}
-            {!c.email && !c.phone && !c.linkedin_url && !c.twitter_url && (
+            {!c.email && !c.phone && !c.linkedin_url && (
               <div className="text-xs text-muted">No contact details on file.</div>
             )}
           </dl>
@@ -86,8 +84,8 @@ export default async function SpeakerDetailPage({ params }: { params: { id: stri
               {company.industry && (
                 <div className="flex justify-between gap-3"><dt className="text-muted">Industry</dt><dd>{company.industry}</dd></div>
               )}
-              {company.website && (
-                <div className="flex justify-between gap-3"><dt className="text-muted">Website</dt><dd><a href={company.website} target="_blank" rel="noreferrer" className="text-xs hover:text-accent">{new URL(company.website.startsWith("http") ? company.website : `https://${company.website}`).hostname} ↗</a></dd></div>
+              {company.website_url && (
+                <div className="flex justify-between gap-3"><dt className="text-muted">Website</dt><dd><a href={company.website_url.startsWith("http") ? company.website_url : `https://${company.website_url}`} target="_blank" rel="noreferrer" className="text-xs hover:text-accent">Visit ↗</a></dd></div>
               )}
             </dl>
           ) : (
@@ -96,17 +94,13 @@ export default async function SpeakerDetailPage({ params }: { params: { id: stri
         </Card>
       </div>
 
-      {/* Session history / notes placeholder */}
+      {/* Session history placeholder */}
       <div className="mt-8">
-        <h4 className="text-sm uppercase tracking-wider text-muted mb-3">Session history & notes</h4>
+        <h4 className="text-sm uppercase tracking-wider text-muted mb-3">Session history</h4>
         <Card>
-          {c.notes ? (
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">{c.notes}</p>
-          ) : (
-            <div className="text-sm text-muted">
-              <p>No session history captured yet. Once a Sessions table lands in Supabase, this panel will list every session this speaker delivered — with summit, sponsor associations, and downstream engagement.</p>
-            </div>
-          )}
+          <div className="text-sm text-muted">
+            <p>No session history captured yet. Once a Sessions table lands in Supabase, this panel will list every session this speaker delivered — with summit, sponsor associations, and downstream engagement.</p>
+          </div>
         </Card>
       </div>
 
