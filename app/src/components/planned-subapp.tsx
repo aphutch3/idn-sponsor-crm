@@ -12,18 +12,22 @@ export function PlannedSubApp({
   subtitle,
   features,
   speedLinks,
+  parentHref = "/engager",
+  parentLabel = "Engager",
 }: {
   eyebrow: string;
   title: string;
   subtitle: string;
   features: PlannedFeature[];
   speedLinks: { label: string; href: string }[];
+  parentHref?: string;
+  parentLabel?: string;
 }) {
   return (
     <div className="p-8 max-w-6xl">
       <div className="flex items-center gap-2 text-xs text-muted mb-3">
-        <Link href="/engager" className="hover:text-strong">
-          Engager
+        <Link href={parentHref} className="hover:text-strong">
+          {parentLabel}
         </Link>
         <span>/</span>
         <span className="text-strong">{title}</span>

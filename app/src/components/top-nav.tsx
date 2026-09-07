@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppSwitcher } from "./app-switcher";
 import { EngagerSwitcher } from "./engager-switcher";
+import { InfluencersSwitcher } from "./influencers-switcher";
 
 // Matches the .tk-nav bar from idn-skill-platform.
 const NAV = [
@@ -31,6 +32,7 @@ export function TopNav() {
               </Link>
             );
           })}
+          <InfluencersSwitcher />
           <EngagerSwitcher />
         </div>
       </div>
