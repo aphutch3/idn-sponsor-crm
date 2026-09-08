@@ -14,3 +14,7 @@ data/*.csv
 /out/
 # os
 .DS_Store
+
+# build info + local smoke scripts
+app/tsconfig.tsbuildinfo
+app/scripts/smoke-*.ts

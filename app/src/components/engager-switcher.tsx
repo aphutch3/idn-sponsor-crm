@@ -74,6 +74,7 @@ const ROW_2: SubApp[] = [
     tagline: "X, LinkedIn, YouTube reach",
     status: "planned",
     speedLinks: [
+      { label: "LinkedIn monitor", href: "/linkedin-monitor" },
       { label: "New post", href: "/engager/social/new" },
       { label: "Schedule", href: "/engager/social?tab=schedule" },
       { label: "Mentions & replies", href: "/engager/social?tab=inbox" },

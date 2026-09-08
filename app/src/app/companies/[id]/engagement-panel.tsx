@@ -3,6 +3,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui";
+import LinkedinPanel from "@/components/LinkedinPanel";
 import type { CompanyRow, CompanyContactRow, CompanyActivityRow, CompanySendRow } from "./company-shell";
 
 type Channel = "email" | "x" | "linkedin";
@@ -70,7 +71,12 @@ export function CompanyEngagementPanel({
         <XChannel company={company} contacts={contacts} activity={activity} />
       )}
       {channel === "linkedin" && (
-        <LinkedInChannel company={company} contacts={contacts} activity={activity} />
+        <>
+          <div style={{ background: "white", border: "1px solid var(--tk-border)", borderRadius: 8, padding: 16 }}>
+            <LinkedinPanel entityId={company.id} entityType="company" linkedinUrl={company.linkedin_url ?? null} />
+          </div>
+          <LinkedInChannel company={company} contacts={contacts} activity={activity} />
+        </>
       )}
     </div>
   );
