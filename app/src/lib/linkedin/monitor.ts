@@ -11,6 +11,7 @@ import { fetchOne } from "./fetcher";
 import { buildUrl, type LinkedinFetchType } from "./urls";
 import { parseFetch, type Parsed } from "./parse";
 import { diff, hashParsed } from "./diff";
+import { runPostsForEntity } from "./posts-pipeline";
 
 export type MonitorRunSummary = {
   readonly config_id: string;
@@ -39,6 +40,9 @@ type MonitorConfigRow = {
   next_run_at: string | null;
   run_cursor: { offset?: number } | null;
   meta: Record<string, unknown> | null;
+  relevance_min_score: number;
+  topic_filter: string[];
+  score_posts: boolean;
 };
 
 type ListBindingRow = { id: string; list_id: string; honor_suppressions: boolean; suppression_list_ids: string[] };
@@ -121,7 +125,7 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
 
   const { data: cfg, error: cErr } = await supa
     .from("linkedin_monitor_configs")
-    .select("id, name, list_binding_id, fetch_types, cadence_seconds, jitter_seconds, batch_size, per_fetch_delay_ms, active, last_run_at, next_run_at, run_cursor, meta")
+    .select("id, name, list_binding_id, fetch_types, cadence_seconds, jitter_seconds, batch_size, per_fetch_delay_ms, active, last_run_at, next_run_at, run_cursor, meta, relevance_min_score, topic_filter, score_posts")
     .eq("id", configId)
     .maybeSingle();
   if (cErr || !cfg) return { ...summary, reason: `config not found: ${cErr?.message ?? "no row"}` };
@@ -176,6 +180,41 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
 
     for (const fetchType of config.fetch_types) {
       if (fetchesInTick >= GLOBAL_FETCH_CAP) break outer;
+
+      // ------------------------------------------------------------------
+      // Posts fetch types: parallel pipeline (dedup by post_urn, score with
+      // Perplexity, emit new_post signals). Does NOT touch linkedin_snapshots.
+      // ------------------------------------------------------------------
+      const isCompanyPosts = fetchType === "company_posts" && member.entity_type === "company";
+      const isProfilePosts = fetchType === "profile_activity" && member.entity_type === "contact";
+      if (isCompanyPosts || isProfilePosts) {
+        if (!linkedinUrl) continue; // no URL, silently skip
+        if (fetchesInTick > 0) await sleep(Math.max(0, config.per_fetch_delay_ms));
+        fetchesInTick++;
+        summary.fetches_attempted++;
+
+        const res = await runPostsForEntity({
+          entity_type: member.entity_type,
+          entity_id: member.entity_id,
+          linkedin_url: linkedinUrl,
+          monitor_config_id: config.id,
+          relevance_min_score: config.relevance_min_score,
+          topic_filter: config.topic_filter?.length ? config.topic_filter : undefined,
+          score_posts: config.score_posts,
+        });
+
+        if (!res.ok) {
+          summary.errors++;
+          if (res.rate_limited || res.blocked) {
+            paused = true;
+            pausedReason = `posts pipeline ${res.blocked ? "blocked" : "rate-limited"}: ${res.error}`;
+            break outer;
+          }
+        } else {
+          summary.signals_emitted += res.signals_emitted;
+        }
+        continue; // done with this fetchType for this member
+      }
 
       const built = buildUrl(member.entity_type, fetchType, linkedinUrl);
       if (!built.ok) continue; // silently skip: no URL for this combo
