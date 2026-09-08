@@ -1,16 +1,13 @@
 import { db } from "@/lib/supabase";
-import { PageHeader, Card, Badge } from "@/components/ui";
+import { Card, Badge } from "@/components/ui";
 import Link from "next/link";
 import { fmtNum } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 
-export const revalidate = 60;
-
-// Three-column drill-down: Macro → Group → Subcategory
-// Each column shows counts. Selected path is reflected in ?macro=&group=&sub=
-// This is the featured navigation surface — it's how the CRM is browsed.
-
-export default async function TaxonomyPage({ searchParams }: { searchParams: { macro?: string; group?: string; sub?: string } }) {
+// Marketplace panel — Macro → Group → Subcategory three-column drill-down.
+// Extracted from the former /taxonomy page so /start can host it as a tab.
+// Selected path is reflected in ?macro=&group=&sub=
+export async function MarketplacePanel({ searchParams }: { searchParams: { macro?: string; group?: string; sub?: string } }) {
   const supa = db();
   const { data: rows } = await supa.from("v_taxonomy").select("*");
   const nodes = (rows || []) as { macro_category: string; group: string | null; subcategory: string | null; company_count: number }[];
@@ -34,33 +31,33 @@ export default async function TaxonomyPage({ searchParams }: { searchParams: { m
   const subList = selMacro && selGroup ? Object.entries(macros[selMacro].groups[selGroup].subs).sort((a, b) => b[1] - a[1]) : [];
   const selSub = searchParams.sub;
 
-  // Fetch companies filtered by current selection
   let q = supa.from("companies").select("id, name, domain, sponsor_tier, company_type, summit_interest, macro_category, group, subcategory, is_customer, stay_on_top").order("stay_on_top", { ascending: false }).order("sponsor_tier_rank", { ascending: true, nullsFirst: false }).order("name").limit(80);
   if (selMacro) q = q.eq("macro_category", selMacro);
   if (selGroup) q = q.eq("group", selGroup);
   if (selSub) q = q.eq("subcategory", selSub);
   const { data: companies } = await q;
 
-  return (
-    <div className="p-8">
-      <PageHeader
-        title="Taxonomy"
-        subtitle="Macro → Group → Subcategory · your primary navigation into the portfolio"
-      />
+  // Marketplace drill-down links stay on /start with tab=marketplace preserved.
+  const hrefFor = (query: Record<string, string | undefined>) => {
+    const q: Record<string, string> = { tab: "marketplace" };
+    for (const [k, v] of Object.entries(query)) if (v) q[k] = v;
+    return { pathname: "/start", query: q };
+  };
 
-      {/* Breadcrumb */}
+  return (
+    <div>
       <nav className="flex items-center gap-1 text-sm mb-4 flex-wrap">
-        <Link href="/taxonomy" className="text-muted hover:text-fg">All</Link>
+        <Link href={hrefFor({})} className="text-muted hover:text-fg">All</Link>
         {selMacro && (
           <>
             <ChevronRight className="w-3.5 h-3.5 text-muted" />
-            <Link href={{ pathname: "/taxonomy", query: { macro: selMacro } }} className="hover:text-accent">{selMacro}</Link>
+            <Link href={hrefFor({ macro: selMacro })} className="hover:text-accent">{selMacro}</Link>
           </>
         )}
         {selMacro && selGroup && (
           <>
             <ChevronRight className="w-3.5 h-3.5 text-muted" />
-            <Link href={{ pathname: "/taxonomy", query: { macro: selMacro, group: selGroup } }} className="hover:text-accent">{selGroup}</Link>
+            <Link href={hrefFor({ macro: selMacro, group: selGroup })} className="hover:text-accent">{selGroup}</Link>
           </>
         )}
         {selSub && (
@@ -71,31 +68,26 @@ export default async function TaxonomyPage({ searchParams }: { searchParams: { m
         )}
       </nav>
 
-      {/* Three-column browser */}
       <div className="grid grid-cols-3 gap-3 mb-6">
-        <TaxonomyCol
+        <MarketplaceCol
           label="Macro Category"
           items={macroList.map(([k, v]) => ({ label: k, count: v.total, active: k === selMacro }))}
-          hrefBase="/taxonomy"
           param="macro"
         />
-        <TaxonomyCol
+        <MarketplaceCol
           label="Group"
           items={groupList.map(([k, v]) => ({ label: k, count: v.total, active: k === selGroup }))}
-          hrefBase="/taxonomy"
           param="group"
           carry={{ macro: selMacro }}
         />
-        <TaxonomyCol
+        <MarketplaceCol
           label="Subcategory"
           items={subList.map(([k, v]) => ({ label: k, count: v, active: k === selSub }))}
-          hrefBase="/taxonomy"
           param="sub"
           carry={{ macro: selMacro, group: selGroup }}
         />
       </div>
 
-      {/* Companies in current slice */}
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-medium">
           Companies in{" "}
@@ -152,10 +144,9 @@ export default async function TaxonomyPage({ searchParams }: { searchParams: { m
   );
 }
 
-function TaxonomyCol({ label, items, hrefBase, param, carry = {} }: {
+function MarketplaceCol({ label, items, param, carry = {} }: {
   label: string;
   items: { label: string; count: number; active: boolean }[];
-  hrefBase: string;
   param: string;
   carry?: Record<string, string | undefined>;
 }) {
@@ -166,13 +157,13 @@ function TaxonomyCol({ label, items, hrefBase, param, carry = {} }: {
       <div className="max-h-96 overflow-y-auto">
         {items.length === 0 && <div className="px-3 py-6 text-xs text-muted text-center">Select a parent to browse</div>}
         {items.map(item => {
-          const query: Record<string, string> = {};
+          const query: Record<string, string> = { tab: "marketplace" };
           for (const [k, v] of Object.entries(carry)) if (v) query[k] = v;
           query[param] = item.label;
           return (
             <Link
               key={item.label}
-              href={{ pathname: hrefBase, query }}
+              href={{ pathname: "/start", query }}
               className={`flex items-center gap-2 px-3 py-2 text-sm border-b border-border/40 hover:bg-subtle transition-colors ${item.active ? "bg-accent/10 text-accent" : ""}`}
             >
               <span className="flex-1 truncate">{item.label}</span>

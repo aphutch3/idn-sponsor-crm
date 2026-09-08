@@ -1,14 +1,12 @@
 import { db } from "@/lib/supabase";
-import { PageHeader, Card, Badge } from "@/components/ui";
+import { Card, Badge } from "@/components/ui";
 import Link from "next/link";
-import { fmtDate, fmtNum } from "@/lib/utils";
+import { fmtDate } from "@/lib/utils";
 import { Star, TrendingUp, Users } from "lucide-react";
 
-export const revalidate = 30;
-
-// Priorities = the people and companies to stay on top of, in one screen.
-
-export default async function PrioritiesPage() {
+// Priorities panel — the people and companies to stay on top of, in one screen.
+// Extracted from the former /priorities page so /start can host it as a tab.
+export async function PrioritiesPanel() {
   const supa = db();
 
   const [{ data: keyContacts }, { data: stayOnTop }, { data: byKey }] = await Promise.all([
@@ -17,17 +15,11 @@ export default async function PrioritiesPage() {
     supa.from("v_key_contacts").select("key_contact"),
   ]);
 
-  // Bucket key contacts by their tag (FRIEND, SPEAKER, TARGET…)
   const keyCounts: Record<string, number> = {};
   (byKey || []).forEach((c: any) => (c.key_contact || []).forEach((k: string) => keyCounts[k] = (keyCounts[k] || 0) + 1));
 
   return (
-    <div className="p-8 max-w-6xl">
-      <PageHeader
-        title="Priorities"
-        subtitle="Key Contacts to nurture · Customers to stay on top of"
-      />
-
+    <div className="max-w-6xl">
       <div className="grid grid-cols-3 gap-3 mb-8">
         <Card className="p-4">
           <div className="flex items-center gap-2 text-xs uppercase text-muted mb-2">
@@ -60,7 +52,6 @@ export default async function PrioritiesPage() {
         </Card>
       </div>
 
-      {/* Stay on top of */}
       <section className="mb-10">
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp className="w-4 h-4 text-accent" />
@@ -107,7 +98,6 @@ export default async function PrioritiesPage() {
         </Card>
       </section>
 
-      {/* Key contacts */}
       <section>
         <div className="flex items-center gap-2 mb-3">
           <Star className="w-4 h-4 text-accent" />

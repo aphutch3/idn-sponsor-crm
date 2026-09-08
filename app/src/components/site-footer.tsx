@@ -13,8 +13,9 @@ export function SiteFooter() {
         </div>
         <div>
           <h4>Focus</h4>
-          <Link href="/priorities">Priorities</Link>
-          <Link href="/taxonomy">Taxonomy</Link>
+          <Link href="/start?tab=priorities">Priorities</Link>
+          <Link href="/start?tab=marketplace">Marketplace</Link>
+          <Link href="/start?tab=dashboard">Dashboard</Link>
           <Link href="/pipeline">Pipeline</Link>
         </div>
         <div>

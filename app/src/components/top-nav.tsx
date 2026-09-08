@@ -7,9 +7,7 @@ import { InfluencersSwitcher } from "./influencers-switcher";
 
 // Matches the .tk-nav bar from idn-skill-platform.
 const NAV = [
-  { href: "/", label: "Overview" },
-  { href: "/priorities", label: "Priorities" },
-  { href: "/taxonomy", label: "Taxonomy" },
+  { href: "/start", label: "Start" },
   { href: "/companies", label: "Companies" },
   { href: "/contacts", label: "Contacts" },
   { href: "/pipeline", label: "Pipeline" },
@@ -20,12 +18,12 @@ export function TopNav() {
   return (
     <nav className="tk-nav">
       <div className="flex items-center gap-8">
-        <Link href="/" className="tk-editorial text-white" style={{ fontSize: 22 }}>
+        <Link href="/start" className="tk-editorial text-white" style={{ fontSize: 22 }}>
           IDN · The Engager
         </Link>
         <div className="hidden md:flex gap-6 items-center">
           {NAV.map(item => {
-            const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            const active = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link key={item.href} href={item.href} className={active ? "active" : ""}>
                 {item.label}
