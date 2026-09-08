@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader, Card, Badge, Empty } from "@/components/ui";
 
-type ListInfo = { id: string; name: string; kind: string; entity_type: string };
+type ListInfo = { id: string; name: string; kind: string; entity_types: string[] };
 type Binding = { id: string; binding_type: string; honor_suppressions: boolean; list_id: string; lists?: ListInfo | null };
 type Config = {
   id: string;
@@ -191,7 +191,7 @@ export default function LinkedinMonitorShell() {
           {configs.map((c) => {
             const listName = c.list_bindings?.lists?.name ?? "(no list bound)";
             const listKind = c.list_bindings?.lists?.kind ?? "";
-            const listEntity = c.list_bindings?.lists?.entity_type ?? "";
+            const listEntities = (c.list_bindings?.lists?.entity_types ?? []).join(",");
             const isExpanded = expanded === c.id;
             const snaps = snapshots[c.id] ?? [];
             const pauseReason = (c.meta as { paused_reason?: string })?.paused_reason;
@@ -208,7 +208,7 @@ export default function LinkedinMonitorShell() {
                     </div>
                     <div className="text-xs text-muted mt-1">
                       List: <span className="font-medium">{listName}</span>{" "}
-                      {listKind && <span className="mono">({listKind}·{listEntity})</span>}
+                      {listKind && <span className="mono">({listKind}·{listEntities})</span>}
                     </div>
                     <div className="text-xs text-muted mt-1">
                       Cadence: {fmtDuration(c.cadence_seconds)} · Batch: {c.batch_size} · Per-fetch delay: {Math.round(c.per_fetch_delay_ms / 1000)}s · Last run: {fmtAgo(c.last_run_at)}
@@ -340,7 +340,10 @@ function CreateForm({
   const [err, setErr] = useState<string | null>(null);
 
   const usableBindings = useMemo(
-    () => bindings.filter((b) => (b.lists?.entity_type ?? "") === "company" || (b.lists?.entity_type ?? "") === "contact"),
+    () => bindings.filter((b) => {
+      const ets = b.lists?.entity_types ?? [];
+      return ets.includes("company") || ets.includes("contact");
+    }),
     [bindings],
   );
 
@@ -393,7 +396,7 @@ function CreateForm({
             <option value="">— pick a list —</option>
             {usableBindings.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.lists?.name ?? b.id.slice(0, 8)} ({b.lists?.entity_type ?? "?"}·{b.binding_type})
+                {b.lists?.name ?? b.id.slice(0, 8)} ({(b.lists?.entity_types ?? []).join(",") || "?"}·{b.binding_type})
               </option>
             ))}
           </select>

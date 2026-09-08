@@ -19,7 +19,7 @@ export async function GET() {
   const supa = dbWrite();
   const { data, error } = await supa
     .from("linkedin_monitor_configs")
-    .select("*, list_bindings(id, list_id, binding_type, honor_suppressions, lists:list_id(id, name, kind))")
+    .select("*, list_bindings(id, list_id, binding_type, honor_suppressions, lists:list_id(id, name, kind, entity_types))")
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ configs: data ?? [] });

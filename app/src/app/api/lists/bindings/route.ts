@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const { data, error } = await db()
     .from("list_bindings")
-    .select("id, binding_type, active, honor_suppressions, list_id, lists:list_id(id, name, kind, entity_type)")
+    .select("id, binding_type, active, honor_suppressions, list_id, lists:list_id(id, name, kind, entity_types)")
     .eq("active", true)
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
