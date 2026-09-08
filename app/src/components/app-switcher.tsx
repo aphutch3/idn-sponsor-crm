@@ -29,6 +29,7 @@ const FALLBACK_GROUPS: Group[] = [
       { name: "Crunchbase Clone", viewUrl: "https://ai-layers-intelligence.vercel.app/", devUrl: dev("f9140e2e-d11d-42e8-857b-3a95e6b857b2") },
       { name: "Survey Monkey Clone", viewUrl: "https://idn-surveys.vercel.app/", devUrl: dev("39e947f8-0bef-45f2-b555-0fc6cb77a670") },
       { name: "Event Systems", viewUrl: "https://idn-events-app.vercel.app/#/events", devUrl: dev("6ff40b25-548c-4f1a-9ed6-e3f095c16cf4") },
+      { name: "Conference", viewUrl: "https://aie-sponsor-crm.vercel.app/", devUrl: dev("4af11c54-6397-4343-83ba-922137fcf6fe") },
     ],
   },
   {
@@ -86,6 +87,7 @@ const FALLBACK_GROUPS: Group[] = [
       { name: "Supabase Admin", viewUrl: "https://supabase-admin-dashboard-three.vercel.app/", devUrl: dev("68c9becf-b0cb-4e89-bbf7-f321df284c72") },
       { name: "1776 Admin", viewUrl: "https://1776-artifact-inventory.pplx.app/", devUrl: dev("f54aee1d-f721-4f3f-bea6-eddfb33d3737") },
       { name: "Home & Contractors", viewUrl: "https://home-os-gules.vercel.app/", devUrl: dev("9d6b4bcd-d237-4fb8-8807-6e4e6ce6ab50") },
+      { name: "Project Manager", viewUrl: "https://idn-project-manager.vercel.app", devUrl: dev("6c3a08cd-be69-4076-a909-56536c98d059") },
     ],
   },
 ];
