@@ -1,7 +1,7 @@
 // Read signals, optionally filtered by entity, config, or triage state.
 
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/supabase";
+import { dbWrite } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const scope = u.searchParams.get("scope"); // 'open' | 'all' — default 'open'
   const limit = Math.min(100, Math.max(1, Number(u.searchParams.get("limit") ?? "50")));
 
-  let q = db()
+  let q = dbWrite()
     .from("linkedin_signals")
     .select("id, entity_type, entity_id, snapshot_id, prior_snapshot_id, signal_kind, before_value, after_value, detected_at, triaged, dismissed, meta")
     .order("detected_at", { ascending: false })
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (entityType) q = q.eq("entity_type", entityType);
   if (configId) {
     // signals don't have config_id directly — filter via snapshot join
-    const { data: snapIds } = await db()
+    const { data: snapIds } = await dbWrite()
       .from("linkedin_snapshots")
       .select("id")
       .eq("monitor_config_id", configId)

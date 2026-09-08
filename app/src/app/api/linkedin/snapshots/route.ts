@@ -1,7 +1,7 @@
 // Read-only snapshot lookup, filterable by monitor_config_id, entity, or fetch_type.
 
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/supabase";
+import { dbWrite } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const fetchType = u.searchParams.get("fetch_type");
   const limit = Math.min(100, Math.max(1, Number(u.searchParams.get("limit") ?? "20")));
 
-  let q = db()
+  let q = dbWrite()
     .from("linkedin_snapshots")
     .select("id, entity_type, entity_id, fetch_type, fetched_at, source_url, http_status, content_hash, parsed, error, monitor_config_id")
     .order("fetched_at", { ascending: false })
