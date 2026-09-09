@@ -18,3 +18,7 @@ data/*.csv
 # build info + local smoke scripts
 app/tsconfig.tsbuildinfo
 app/scripts/smoke-*.ts
+
+# python bytecode
+__pycache__/
+*.pyc
