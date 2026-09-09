@@ -164,10 +164,10 @@ export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEnti
     const sigRows = worthy.map((s) => ({
       entity_type: input.entity_type,
       entity_id: input.entity_id,
-      kind: "new_post" as const,
+      signal_kind: "new_post" as const,
       snapshot_id: null,
-      monitor_config_id: input.monitor_config_id,
       meta: {
+        monitor_config_id: input.monitor_config_id,
         post_urn: s.post.urn,
         post_url: s.post.url,
         posted_at: s.post.posted_at_iso,
