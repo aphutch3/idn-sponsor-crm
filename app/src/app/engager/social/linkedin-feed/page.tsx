@@ -2,7 +2,7 @@
 // Reads scored posts from linkedin_posts, joins to companies/contacts,
 // renders sorted by score DESC. Static v1: no filter interactions yet.
 import Link from "next/link";
-import { admin } from "@/lib/supabase";
+import { dbWrite } from "@/lib/supabase";
 import { PageHeader, Badge, Card, Stat } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +59,9 @@ function scoreLabel(s: number | null): string {
 }
 
 export default async function LinkedinFeedPage() {
-  const db = admin();
+  // Service-role client is required because linkedin_posts RLS only allows service_role.
+  // Safe here because this is a server component with server-only env.
+  const db = dbWrite();
 
   // Pull all scored posts (relevance_score IS NOT NULL, i.e. LLM or fallback ran)
   const { data: postsData } = await db
