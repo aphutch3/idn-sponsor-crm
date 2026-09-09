@@ -51,10 +51,24 @@ select
   c.*,
   stg.sponsor_tier,
   stg.sponsor_tier_rank,
-  stg.summit_interest,
+  -- summit_interest: stg stores JSON-encoded text like '["AI Deployment", ...]'.
+  -- The app expects text[] and calls .slice(...).map on it, so we parse.
+  case
+    when stg.summit_interest is null or stg.summit_interest = '' then null
+    else (
+      select array_agg(elem)
+      from jsonb_array_elements_text(
+        case
+          when stg.summit_interest ~ '^\s*\[' then stg.summit_interest::jsonb
+          else jsonb_build_array(stg.summit_interest)
+        end
+      ) as elem
+    )
+  end                       as summit_interest,
   stg."group",
   stg.subcategory,
-  stg.rank_history,
+  -- rank_history is stored as jsonb string in stg (e.g. "2023_2_1"). App treats it as text.
+  (stg.rank_history #>> '{}') as rank_history,
   stg.rank_last_year,
   stg.rank_frequency
 from public.company c
