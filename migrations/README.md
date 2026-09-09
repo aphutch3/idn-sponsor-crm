@@ -197,3 +197,54 @@ Tried Data API first. Provisioning it required either JWT auth (needs infrastruc
 **Coverage tested:** 11/12 SQL parity patterns pass against canonical. The one "failure" was hitting a real canonical-vs-Supabase schema drift on `list.entity_types` (column doesn't exist on canonical). That's data-model work for Phase 1's later steps, not a shim bug.
 
 **Prod pointer unchanged.** `.env.production` on Vercel still has no `DB_TARGET`, so it defaults to `supabase`. Step 1.6 will do a preview deploy with `DB_TARGET=neon`.
+
+---
+
+## Step 1.6 — Preview deploy on DB_TARGET=neon (2026-09-09) ✅
+
+Deployed the Engager app to a Vercel preview with `DB_TARGET=neon` pointing at canonical. Preview env vars set: `DB_TARGET=neon`, `DATABASE_URL_CANONICAL` (pooled DSN), `DATABASE_URL_CANONICAL_READ` (same DSN), plus non-sensitive supabase/API vars copied from prod.
+
+Preview URL: `https://idn-sponsor-cjfrbxdzd-aphutch3s-projects.vercel.app` (Vercel SSO protected).
+
+Smoke test surfaced two schema-drift issues:
+
+1. **Table naming.** 100 call sites in the app reference plural table names (`contacts`, `companies`, `lists`, `tags`, ...). Canonical uses singular (`contact`, `company`, `list`, `tag`) by design — the schema-as-art principle. Every plural query returned `{data: null, error: "relation does not exist"}`.
+
+2. **Dropped columns.** Canonical `contact` deliberately does not have `key_contact` (moved to `entity_tag`) or `emails_opened/clicked/delivered/bounced/replied` (moved to `campaign_send` timestamps). The app filters and displays these fields directly.
+
+Fix: **Migration 012 — plural aliases** (Step 1.6b, below).
+
+Diagnostic route: `GET /api/admin/db-diag?secret=<CRON_SECRET>` runs a battery of probes and returns raw `{data, error, count}` per query, useful for future schema-parity verification.
+
+---
+
+## Step 1.6b — 012_plural_aliases.sql (2026-09-09) ✅
+
+Added `migrations/012_plural_aliases.sql`: a compatibility layer of plural-name views over the singular canonical tables. Ships the app unchanged during Phase 1 cutover; drop these views when the app is later refactored to canonical singular naming (planned as a Phase 2 app refactor).
+
+**Views created (16):**
+
+- **Identity views (14, automatically updatable):** `activities`, `agent_runs`, `campaign_sends`, `companies`, `enrichments`, `linkedin_monitor_configs`, `linkedin_posts`, `linkedin_snapshots`, `linkedin_topic_tags`, `list_bindings`, `list_members`, `lists`, `social_mentions`, `tasks`, `tags`. Each is `create view <plural> as select * from <singular>`. INSERT/UPDATE/DELETE flow through to base tables.
+- **Shape-restoring view (1):** `contacts` = `contact.*` plus computed:
+  - `key_contact text[]` — array of uppercased tag slugs from `entity_tag` where `entity_table='contact'`
+  - `emails_opened / emails_clicked / emails_delivered / emails_bounced int` — computed via subqueries on `campaign_send` timestamps (`opened_at`, `clicked_at`, `delivered_at`, `bounced_at`)
+  - `emails_replied int` — constant `0` until reply tracking is added
+  - Added columns are read-only; underlying `contact` columns remain updatable through the view.
+
+**Not covered (missing from canonical, will show empty states in the app):** `linkedin_signals`, `list_filters`, `list_versions`, `segments`, `social_refresh_log`, `v_key_contacts`, `v_taxonomy`. These are legacy features not yet ported and are non-critical for cutover.
+
+**Test procedure:**
+
+1. Created branch `test-012-plural-aliases` (br-broad-brook-a5nbs29a).
+2. Applied migration; verified all 16 views have exact read parity with base tables.
+3. Verified identity view mutability by full insert/update/delete round-trip on `tags` view.
+4. Verified `contacts` view exposes `key_contact` correctly: 3463 contacts have 1 tag, 236 have 2 tags. Speaker filter (`key_contact && ARRAY['SPEAKER-EVANGCONF']`) returns 236 rows — matches entity_tag data.
+5. Re-ran the app's Neon-DB shim diag script against the branch: 11/11 plural probes now succeed.
+
+**Promotion:** applied to canonical main via direct psycopg (2026-09-09). Branch deleted post-promotion.
+
+**Rollback:** `drop view public.<name>;` for each of the 16 views. See migration file inline comments — each view has an idempotent `create or replace view` guard (except `contacts`, which uses `drop view if exists` + `create view` because its column shape differs from a naive `select *`).
+
+**Status:** ✅ 012 applied to canonical main. App can now be preview-deployed on `DB_TARGET=neon` and every page that queries the covered tables will resolve correctly.
+
+**Next: Step 1.6c** — re-deploy preview and re-run the smoke test to confirm pages render with real data.
