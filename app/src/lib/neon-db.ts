@@ -64,19 +64,56 @@ function quoteIdent(name: string): string {
 }
 
 // PostgREST-style column path (a.b.c) → we only support single-column form here (a).
-// Foreign-table paths ("company(id,name)") are NOT supported.
+// Foreign-table embeds ("companies(id,name)") are STRIPPED here rather than
+// synthesized: the app receives no embedded row (undefined), but the outer
+// query still runs. Callers that rely on the embed must be refactored to
+// perform a second lookup themselves. This keeps the shim safe for pages
+// that request embeds but don't hard-depend on them.
 function parseSelectCols(selectExpr: string): string {
   const trimmed = selectExpr.trim();
   if (trimmed === "*" || trimmed === "") return "*";
-  const parts = trimmed.split(",").map((p) => p.trim()).filter(Boolean);
-  return parts
-    .map((p) => {
-      // Support alias:col
-      const m = /^([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*)$/.exec(p);
-      if (m) return `${quoteIdent(m[2])} as ${quoteIdent(m[1])}`;
-      return quoteIdent(p);
-    })
-    .join(", ");
+
+  // Remove any embed groups AND their preceding name-of-embed identifier.
+  // Example: `id, name, companies(id, name)` → `id, name`.
+  // We walk char-by-char, and when we hit `(` we rewind to strip the ident
+  // (and optional `alias:` prefix) that named the embed.
+  let scrubbed = "";
+  let depth = 0;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === "(") {
+      if (depth === 0) {
+        // Strip the identifier immediately preceding `(`. Also strip an
+        // optional `alias:` prefix.
+        scrubbed = scrubbed.replace(/[a-zA-Z_][a-zA-Z0-9_]*$/, "");
+        scrubbed = scrubbed.replace(/[a-zA-Z_][a-zA-Z0-9_]*:$/, "");
+        // And any trailing whitespace left dangling.
+        scrubbed = scrubbed.replace(/\s+$/, "");
+      }
+      depth++;
+      continue;
+    }
+    if (ch === ")") { if (depth > 0) depth--; continue; }
+    if (depth === 0) scrubbed += ch;
+  }
+
+  // Clean up: trailing / doubled commas after stripping.
+  scrubbed = scrubbed.replace(/,\s*,/g, ",").replace(/^\s*,|,\s*$/g, "");
+
+  const parts = scrubbed.split(",").map((p) => p.trim()).filter(Boolean);
+  const kept: string[] = [];
+  for (const p of parts) {
+    // alias:col
+    const alias = /^([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*)$/.exec(p);
+    if (alias) { kept.push(`${quoteIdent(alias[2])} as ${quoteIdent(alias[1])}`); continue; }
+    // plain col
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(p)) { kept.push(quoteIdent(p)); continue; }
+    // Anything else (odd remnants from embed parsing) — skip with a warn.
+    // eslint-disable-next-line no-console
+    console.warn(`neon-db: parseSelectCols skipping unrecognized token "${p}" from select "${selectExpr}"`);
+  }
+
+  return kept.length > 0 ? kept.join(", ") : "*";
 }
 
 // -------- The chainable builder ----------------------------------------------------

@@ -248,3 +248,35 @@ Added `migrations/012_plural_aliases.sql`: a compatibility layer of plural-name 
 **Status:** ✅ 012 applied to canonical main. App can now be preview-deployed on `DB_TARGET=neon` and every page that queries the covered tables will resolve correctly.
 
 **Next: Step 1.6c** — re-deploy preview and re-run the smoke test to confirm pages render with real data.
+
+## 013_engager_compat_columns.sql (2026-09-09)
+
+**Purpose:** Extend the plural compat views from 012 with legacy engager columns the app queries but canonical deliberately does not carry. Rather than adding these columns to canonical tables (dilutes the canonical design), surface them on the plural views by joining `stg_engager` on the `external_ref` (`source_system='engager_v1'`) linkage recorded during Phase 1 ingest.
+
+**View changes:**
+
+- **`companies`**: identity + 8 legacy columns — `sponsor_tier text`, `sponsor_tier_rank int`, `summit_interest text`, `"group" text`, `subcategory text`, `rank_history jsonb`, `rank_last_year int`, `rank_frequency text` — all read-only via `stg_engager.companies`.
+- **`contacts`**: identity + `key_contact text[]` (parsed from `stg_engager.contacts.key_contact` JSON-encoded text like `'["FRIEND"]'`, with fallback to `entity_tag` rollup for native canonical contacts) + counters from `campaign_send` (as in 012) + 3 additional legacy fields: `unsubscribed_all_email bool`, `last_email_open_date timestamptz`, `last_email_click_date timestamptz`.
+- **`lists`**: identity + `entity_types text[]` (from `stg_engager.lists.entity_types` via `external_ref`, not derived from `list.kind` which uses a different taxonomy — static/dynamic).
+
+**Test procedure:**
+
+1. Created branch `test-013-engager-compat` (br-lively-mountain-a5ud38h8).
+2. Applied migration; verified:
+   - `companies.sponsor_tier` populated for 101 companies (matches `stg_engager.companies.sponsor_tier is not null` count exactly). Full sponsor_tier breakdown covers all 8 tiers (0_Gorilla through 90_Purchased).
+   - `companies.summit_interest` populated for 194 (matches stg).
+   - `contacts.key_contact @> ARRAY['FRIEND']` returns 166 (matches JSON-array parsing of stg values).
+   - `contacts.key_contact @> ARRAY['SPEAKER']` returns 35.
+   - `contacts.unsubscribed_all_email is true` returns 11.
+   - `lists` view: all 3 LinkedIn watch lists show `entity_types=['company']` from stg via external_ref.
+3. Confirmed the socializers seed query `key_contact @> ARRAY['FRIEND'] and linkedin_url is not null` returns 161 rows (from 0 previously).
+
+**Promotion:** applied to canonical main via direct psycopg (2026-09-09). Branch deleted post-promotion.
+
+**Rollback:** re-run `012_plural_aliases.sql` (idempotent `drop view if exists` + `create view`). That restores the identity and shape-restoring views without the engager compat columns.
+
+**Status:** ✅ 013 applied to canonical main. Complements 012. Together they cover every legacy column the current app queries.
+
+**Shim companion change:** `app/src/lib/neon-db.ts` `parseSelectCols` now strips PostgREST embed syntax (`companies(id, name)`) gracefully instead of throwing synchronously. The embed itself is not synthesized — the caller receives no nested object — but the outer query proceeds. This unblocks pages that use embeds cosmetically (e.g. `/influencers/socializers`).
+
+**Next: Step 1.6c continued** — redeploy preview, re-run smoke test, expect green home/pipeline/socializers/linkedin-monitor.
