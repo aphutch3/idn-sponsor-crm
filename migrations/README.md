@@ -175,3 +175,25 @@ TOTAL: read=6890  loaded=6890
 - `stg_engager` schema preserved on main for Step 1.7 cutover and 1.8 rollback rehearsal.
 
 **Next: Step 1.5** — add `DB_TARGET` (supabase | neon) flag to the Engager Next.js app so it can be pointed at either backend.
+
+---
+
+## Step 1.5 — DB_TARGET flag (2026-09-09) ✅
+
+Added `DB_TARGET` env var to `app/src/lib/supabase.ts`:
+- `DB_TARGET=supabase` (default) — legacy Supabase client, prod behavior unchanged
+- `DB_TARGET=neon` — routes `db()` and `dbWrite()` to a new Neon-backed shim at `app/src/lib/neon-db.ts`
+
+The Neon shim is a PostgREST-shape query builder over `@neondatabase/serverless` HTTP mode. It implements the exact method surface the app uses today: 26 methods across `.from()`, filters, modifiers, mutations, and `.rpc()`. No public HTTP endpoint — the shim connects to Postgres via the DSN, same as our psycopg scripts.
+
+**Why this approach (not Neon Data API):**
+Tried Data API first. Provisioning it required either JWT auth (needs infrastructure we don't have yet) or exposing an unauthenticated anon-role endpoint over public HTTPS (rejected — canonical has real PII). The serverless-driver shim keeps auth via DSN, adds no public surface, and is framework-portable to TanStack.
+
+**Environment variables:**
+- `DB_TARGET=neon`
+- `DATABASE_URL_CANONICAL` — the pooled canonical DSN
+- `DATABASE_URL_CANONICAL_READ` (optional) — read-only DSN; falls back to write DSN
+
+**Coverage tested:** 11/12 SQL parity patterns pass against canonical. The one "failure" was hitting a real canonical-vs-Supabase schema drift on `list.entity_types` (column doesn't exist on canonical). That's data-model work for Phase 1's later steps, not a shim bug.
+
+**Prod pointer unchanged.** `.env.production` on Vercel still has no `DB_TARGET`, so it defaults to `supabase`. Step 1.6 will do a preview deploy with `DB_TARGET=neon`.
