@@ -85,7 +85,7 @@ export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEnti
   // 3. Score new posts (parallel, capped)
   const shouldScore = input.score_posts !== false;
   const tags = shouldScore ? await loadTopicTags() : [];
-  const SCORE_CONCURRENCY = 3;
+  const SCORE_CONCURRENCY = 2;
   const scored: Array<{ post: RawPost; score: number; topics: string[]; reason: string; hits: string[]; model: string }> = [];
 
   if (shouldScore && newPosts.length > 0) {

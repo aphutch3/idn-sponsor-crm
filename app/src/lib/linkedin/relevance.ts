@@ -99,30 +99,50 @@ export async function scorePostRelevance(
   ].filter(Boolean).join("\n\n");
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20_000);
-    const res = await fetch(PPLX_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 200,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timer);
+    // Retry with backoff on 429/5xx. Max 3 attempts, ~2s/4s waits.
+    let res: Response | null = null;
+    let lastStatus = 0;
+    let lastBody = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25_000);
+      try {
+        res = await fetch(PPLX_ENDPOINT, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.1,
+            max_tokens: 200,
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      lastStatus = res.status;
+      if (res.ok) break;
+      // Retry on 429/5xx only
+      if (res.status !== 429 && res.status < 500) {
+        lastBody = await res.text().catch(() => "");
+        break;
+      }
+      lastBody = await res.text().catch(() => "");
+      if (attempt < 2) {
+        const waitMs = 2000 * Math.pow(2, attempt) + Math.floor(Math.random() * 500);
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      return heuristicFallback(keyword_hits, `pplx http ${res.status}: ${body.slice(0, 120)}`);
+    if (!res || !res.ok) {
+      return heuristicFallback(keyword_hits, `pplx http ${lastStatus}: ${lastBody.slice(0, 120)}`);
     }
     const j = await res.json();
     const content: string = j?.choices?.[0]?.message?.content ?? "";

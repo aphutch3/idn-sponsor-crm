@@ -29,10 +29,30 @@ export async function loadTopicTags(opts?: { force?: boolean }): Promise<readonl
     .select("slug, name, category, description, keyword_phrases, articles_30d")
     .eq("active", true);
   if (error) throw new Error(`load_topic_tags: ${error.message}`);
-  const rows = (data ?? []) as TopicTag[];
+  const rawRows = (data ?? []) as TopicTag[];
+  // Enrich: ensure every tag has its own name as a matchable phrase.
+  // Many tags in the seed have keyword_phrases=[]; without this the
+  // prefilter can't recognize the tag's own name in post text.
+  const rows: readonly TopicTag[] = rawRows.map((t) => enrichTag(t));
   _cache = { rows, loaded_at: now };
   return rows;
 }
+
+function enrichTag(t: TopicTag): TopicTag {
+  const enriched = new Set<string>(t.keyword_phrases.map((p) => p.toLowerCase()));
+  const nameLower = t.name.toLowerCase().trim();
+  if (nameLower.length >= 2) enriched.add(nameLower);
+  // Also add slug's word form ("ai-coding" -> "ai coding") if not already present.
+  const slugPhrase = t.slug.replace(/-/g, " ").trim();
+  if (slugPhrase.length >= 2 && slugPhrase !== nameLower) enriched.add(slugPhrase);
+  return { ...t, keyword_phrases: [...enriched] };
+}
+
+// Curated allowlist of 2-character technical terms that are meaningful in
+// enterprise-IT context. Everything else <3 chars is rejected by the prefilter.
+const SHORT_TOKEN_ALLOWLIST = new Set<string>([
+  "ai", "ml", "ci", "cd", "vr", "ar", "xr", "nl", "os", "ui", "ux",
+]);
 
 // ------------------------------------------------------------------
 // Keyword pre-filter
@@ -55,7 +75,10 @@ export function matchKeywords(text: string, tags: readonly TopicTag[]): string[]
   const hits: string[] = [];
   for (const tag of tags) {
     for (const phrase of tag.keyword_phrases) {
-      if (phrase.length < 3) continue;
+      // Length gate: 2-char tokens must be in the curated allowlist,
+      // 3+ chars are always allowed.
+      if (phrase.length < 2) continue;
+      if (phrase.length === 2 && !SHORT_TOKEN_ALLOWLIST.has(phrase)) continue;
       // Multi-word: substring check between whitespace boundaries
       if (phrase.includes(" ")) {
         if (norm.includes(` ${phrase} `)) { hits.push(tag.slug); break; }
