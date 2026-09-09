@@ -280,3 +280,15 @@ Added `migrations/012_plural_aliases.sql`: a compatibility layer of plural-name 
 **Shim companion change:** `app/src/lib/neon-db.ts` `parseSelectCols` now strips PostgREST embed syntax (`companies(id, name)`) gracefully instead of throwing synchronously. The embed itself is not synthesized — the caller receives no nested object — but the outer query proceeds. This unblocks pages that use embeds cosmetically (e.g. `/influencers/socializers`).
 
 **Next: Step 1.6c continued** — redeploy preview, re-run smoke test, expect green home/pipeline/socializers/linkedin-monitor.
+
+## 014_companies_add_employee_count.sql (2026-09-09)
+
+**Purpose:** Add `number_of_employees text` to the `companies` compat view. Fixes the /companies "0 total" header regression discovered during Step 1.7 smoke test — the shim was throwing `column "number_of_employees" does not exist` because the app selects that column and it was not in the 013 view. Shim's catch bubbled `data=null, count=null` to the page, so the header aggregate showed 0.
+
+**Source:** `stg_engager.companies.number_of_employees` (text, raw values like `"30.0"`). Canonical has `employee_count_band` (nicer normalization); we surface the raw stg value verbatim for read compat.
+
+**Test:** applied on branch `test-014` — 2087 total companies, sponsor_tier=101 preserved, sample Zoom=8484, Stratus=2261, Retell AI=21. Promoted to canonical main same day. Branch deleted.
+
+**Rollback:** re-run `013_engager_compat_columns.sql`.
+
+**Status:** ✅ applied to canonical main. No app code change required — the app was already selecting this column.
