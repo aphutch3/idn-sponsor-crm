@@ -292,3 +292,19 @@ Added `migrations/012_plural_aliases.sql`: a compatibility layer of plural-name 
 **Rollback:** re-run `013_engager_compat_columns.sql`.
 
 **Status:** ✅ applied to canonical main. No app code change required — the app was already selecting this column.
+
+## 015_social_refresh_log.sql (2026-09-09)
+
+**Purpose:** Create `public.social_refresh_log` on canonical to host per-run summary rows from `scripts/refresh_social_mentions.py`. Prior Supabase-backed version wrote here directly; the canonical DB had no equivalent, so the Neon-backed script rewrite (same day) needed a landing table. Empty on create.
+
+**Schema:** `id uuid`, `ran_at timestamptz`, `duration_ms int`, `queries_run int`, `posts_inserted int`, `posts_updated int`, `errors jsonb`. Index on `ran_at desc` for the /influencers/socializers "last refresh" indicator.
+
+**Companion changes (not migrations):**
+- `scripts/refresh_social_mentions.py` rewritten to write to `public.social_mention` (canonical, UUID PK + `(platform, platform_post_id)` unique) and `public.social_refresh_log` via psycopg. Old Supabase-backed version preserved as `refresh_social_mentions_supabase_backup.py`.
+- Perplexity cron [42238cc4] task text updated to reflect the Neon target. Cron cadence unchanged (every 6h at :48).
+
+**Test:** applied on branch `test-015` — full end-to-end (xurl → dedup → upsert → log) succeeded: 24 tweets fetched across 8 topics, 22 inserted + 2 updated (overlap with prior stg ingest), 0 dupes on `(platform, platform_post_id)`. Promoted to canonical main same day. Branch deleted.
+
+**Rollback:** `drop table public.social_refresh_log cascade;` + restore `refresh_social_mentions_supabase_backup.py` in place + revert cron task text.
+
+**Status:** ✅ applied to canonical main. Cron will next fire at 2026-09-10 00:48 UTC and write to Neon.
