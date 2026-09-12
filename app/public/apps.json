@@ -26,7 +26,7 @@
       "label": "Content",
       "apps": [
         { "name": "IDN News Dashboard", "viewUrl": "https://tldr-dashboard-rho.vercel.app/#/", "devUrl": "https://www.perplexity.ai/computer/tasks/9b1c3389-7cc7-42d6-89e7-cdb117a46dc0" },
-        { "name": "IDN Signals", "viewUrl": "https://www.perplexity.ai/computer/a/22a557b1-0286-4190-bb20-25788a39b1c6", "devUrl": "https://www.perplexity.ai/computer/tasks/f86def04-3f09-4883-84db-8b00feba6419" },
+        { "name": "X.com", "viewUrl": "https://www.perplexity.ai/computer/a/22a557b1-0286-4190-bb20-25788a39b1c6", "devUrl": "https://www.perplexity.ai/computer/tasks/f86def04-3f09-4883-84db-8b00feba6419" },
         { "name": "Learning Platform", "viewUrl": "https://idn-skill-platform.vercel.app/", "devUrl": "https://www.perplexity.ai/computer/tasks/9fcaf1ac-8d95-4e66-82da-0d7aaf01371b" },
         { "name": "Infographics", "viewUrl": "https://idn-infographics-factory-v2.pplx.app/", "devUrl": "https://www.perplexity.ai/computer/tasks/24988739-5dd1-4ba7-a947-6e5b8cf9178d" },
         { "name": "IDN Landscapes", "viewUrl": "https://landscape-cms.vercel.app/", "devUrl": "https://www.perplexity.ai/computer/tasks/d670c641-a2aa-46e2-b11c-4a307b196857" },
