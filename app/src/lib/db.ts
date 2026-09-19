@@ -53,11 +53,16 @@ function readPool(): Sql {
   return globalThis.__idn_sql_read;
 }
 
+// Proxy target must be callable for `sql\`...\`` template tag invocation to hit the apply trap.
+// Using {} (non-callable) makes `sql` throw "is not a function" when invoked as a tag.
+const sqlTarget = function () {} as unknown as Sql;
+const sqlReadTarget = function () {} as unknown as Sql;
+
 /**
  * Default SQL handle — reads and writes. Use this everywhere unless you need to force
  * the read replica.
  */
-export const sql = new Proxy({} as Sql, {
+export const sql = new Proxy(sqlTarget, {
   get(_target, prop, receiver) {
     return Reflect.get(writePool(), prop, receiver);
   },
@@ -70,7 +75,7 @@ export const sql = new Proxy({} as Sql, {
  * Read-replica handle. Use for heavy analytics queries that don't need write consistency.
  * Falls back to the primary if no replica DSN is configured.
  */
-export const sqlRead = new Proxy({} as Sql, {
+export const sqlRead = new Proxy(sqlReadTarget, {
   get(_target, prop, receiver) {
     return Reflect.get(readPool(), prop, receiver);
   },
