@@ -1,12 +1,25 @@
 // List Manager — types
 // Pure data. No imports from the runtime; safe to consume from client or server.
 // Ports 1:1 to Rust enums/structs.
+//
+// Aligned with canonical schema (post Phase 8):
+//   list         — id, name, description, kind, owner, filter jsonb, member_count,
+//                  raw jsonb, entity_types text[], last_refreshed_at, created_at, updated_at
+//   list_member  — list_id, entity_table ('company'|'contact'), entity_id, added_at,
+//                  added_by, source, meta
+//   list_filter  — list_id (PK), filter_json, refresh_cadence, last_refreshed_at,
+//                  last_member_count, last_error, created_at, updated_at
+//   list_binding — id, list_id, binding_type, binding_ref_id, active,
+//                  honor_suppressions, suppression_list_ids uuid[], config, timestamps
+//   list_version — id, list_id, version_num, member_ids uuid[], member_count,
+//                  reason, created_at
+//
+// App-invented fields (slug, purpose, tags, visibility, pinned, active on list;
+// id and role on list_member) do NOT exist on canonical and have been dropped.
 
 export type EntityType = "company" | "contact";
 
 export type ListKind = "static" | "dynamic" | "hybrid" | "suppression";
-
-export type MemberRole = "include" | "exclude";
 
 export type MemberSource =
   | "manual"
@@ -16,8 +29,6 @@ export type MemberSource =
   | "api";
 
 export type RefreshCadence = "manual" | "hourly" | "daily" | "on_read";
-
-export type Visibility = "private" | "team" | "public";
 
 // Branded IDs prevent mixing up list_id with member_id etc.
 export type ListId = string & { readonly __brand: "ListId" };
@@ -31,29 +42,23 @@ export const asBindingId = (s: string): BindingId => s as BindingId;
 export type List = {
   readonly id: ListId;
   readonly name: string;
-  readonly slug: string | null;
   readonly description: string | null;
   readonly kind: ListKind;
   readonly entity_types: readonly EntityType[];
-  readonly purpose: string | null;
-  readonly tags: readonly string[];
   readonly owner: string | null;
-  readonly visibility: Visibility;
-  readonly pinned: boolean;
-  readonly active: boolean;
   readonly member_count: number;
+  readonly filter: Readonly<Record<string, unknown>>;
+  readonly raw: Readonly<Record<string, unknown>>;
   readonly last_refreshed_at: string | null;
-  readonly meta: Readonly<Record<string, unknown>>;
   readonly created_at: string;
   readonly updated_at: string;
 };
 
+// list_member is keyed by (list_id, entity_table, entity_id) — no synthetic id, no role.
 export type ListMember = {
-  readonly id: string;
   readonly list_id: ListId;
-  readonly entity_type: EntityType;
+  readonly entity_type: EntityType;   // maps to entity_table
   readonly entity_id: EntityId;
-  readonly role: MemberRole;
   readonly source: MemberSource;
   readonly added_at: string;
   readonly added_by: string | null;
@@ -143,7 +148,7 @@ export type FilterValue =
 // Per-entity target for a compiled filter
 export type FilterTarget = {
   readonly entity_type: EntityType;
-  readonly table: string; // "companies" | "contacts"
+  readonly table: string; // canonical singular: "company" | "contact"
   readonly id_column: string; // "id"
   readonly allowed_fields: Readonly<Record<string, FieldSpec>>;
 };

@@ -71,13 +71,18 @@ export async function POST(req: NextRequest) {
     listId = (bnd?.list_id as ListId) ?? ("" as ListId);
   } else {
     // Create list.
+    // Canonical `list` has no tags/meta columns — fold both into raw jsonb.
     const listResult = await createList({
       name: `LinkedIn watch: ${displayName}`,
       kind: "static",
       entity_types: [entity_type],
       description: `Auto-created by Monitor now button for ${entity_type} ${entity_id}`,
-      tags: [QUICK_TAG, entity_type],
-      meta: { quick: true, entity_id, entity_type },
+      raw: {
+        tags: [QUICK_TAG, entity_type],
+        quick: true,
+        entity_id,
+        entity_type,
+      },
     });
     if (!listResult.ok) {
       return NextResponse.json({ ok: false, error: `list creation failed: ${listResult.error.kind}` }, { status: 500 });
