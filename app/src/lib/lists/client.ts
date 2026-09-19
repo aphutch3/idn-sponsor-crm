@@ -25,7 +25,11 @@ import type {
   RefreshCadence,
 } from "./types";
 
-const LIST_COLS = sql`id, name, description, kind, entity_types, owner,
+// NOTE: this must be a function, not a module-level `sql\`...\`` expression.
+// Executing the tag at import time runs the Proxy apply trap in db.ts, which
+// throws "DATABASE_URL_CANONICAL is not set" during Vercel's page-data-collection
+// build phase where env vars aren't injected.
+const listCols = () => sql`id, name, description, kind, entity_types, owner,
   member_count, filter, raw, last_refreshed_at, created_at, updated_at`;
 
 function rowToList(r: Record<string, unknown>): List {
@@ -57,7 +61,7 @@ function toDbError(e: unknown): ListError {
 export async function getList(id: ListId): Promise<Result<List, ListError>> {
   try {
     const rows = await sql<Array<Record<string, unknown>>>`
-      select ${LIST_COLS} from public.list where id = ${id} limit 1
+      select ${listCols()} from public.list where id = ${id} limit 1
     `;
     if (rows.length === 0) return err({ kind: "not_found", what: "list", id });
     return ok(rowToList(rows[0]));
@@ -78,7 +82,7 @@ export async function listLists(
 ): Promise<Result<readonly List[], ListError>> {
   try {
     const rows = await sql<Array<Record<string, unknown>>>`
-      select ${LIST_COLS}
+      select ${listCols()}
         from public.list
        where 1 = 1
          ${f.kind ? sql`and kind = ${f.kind}` : sql``}
@@ -165,7 +169,7 @@ export async function createList(input: CreateListInput): Promise<Result<List, L
          ${sql.json((input.filter ?? {}) as unknown as Parameters<typeof sql.json>[0])},
          ${sql.json((input.raw ?? {}) as unknown as Parameters<typeof sql.json>[0])},
          0)
-      returning ${LIST_COLS}
+      returning ${listCols()}
     `;
     return ok(rowToList(rows[0]));
   } catch (e) {
@@ -204,7 +208,7 @@ export async function updateList(
          set ${sql(clean, ...keys)},
              updated_at = now()
        where id = ${id}
-      returning ${LIST_COLS}
+      returning ${listCols()}
     `;
     if (rows.length === 0) return err({ kind: "not_found", what: "list", id });
     return ok(rowToList(rows[0]));
