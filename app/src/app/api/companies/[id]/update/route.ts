@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { dbWrite } from "@/lib/supabase";
+import { sql, dbError, tx } from "@/lib/db";
 
 // PATCH /api/companies/[id]/update
 // body: { patch: Partial<CompanyRow> }
-// Whitelisted fields only.
+// Whitelisted fields only. Every listed column now exists on canonical `company`.
 export const runtime = "nodejs";
 
 const EDITABLE = new Set([
@@ -22,20 +22,35 @@ const EDITABLE = new Set([
   "conferences",
   "conference_speaking",
   "blockers_count",
-  "stay_on_top",
   "activity",
   "company_owner",
 ]);
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+const NOTABLE = new Set([
+  "rank_stage",
+  "sponsor_tier",
+  "keep",
+  "is_customer",
+  "summit_interest",
+  "conferences",
+]);
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id } = await params;
-  let body: any = {};
-  try { body = await req.json(); } catch {}
-  const patch = body?.patch;
+  let body: unknown = {};
+  try {
+    body = await req.json();
+  } catch {
+    // fall through
+  }
+  const patch = (body as { patch?: Record<string, unknown> })?.patch;
   if (!id || !patch || typeof patch !== "object") {
     return NextResponse.json({ error: "id and patch object required" }, { status: 400 });
   }
-  const clean: Record<string, any> = {};
+  const clean: Record<string, unknown> = {};
   for (const k of Object.keys(patch)) {
     if (EDITABLE.has(k)) clean[k] = patch[k];
   }
@@ -43,34 +58,45 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "no editable fields in patch" }, { status: 400 });
   }
 
-  let write;
-  try { write = dbWrite(); } catch {
-    return NextResponse.json({ error: "Writes disabled — set SUPABASE_SERVICE_ROLE_KEY on the server." }, { status: 503 });
-  }
+  try {
+    // Update the company row and log a change entry to activity in one transaction.
+    const result = await tx(async (t) => {
+      // Build a dynamic UPDATE using postgres.js helper for object => SET.
+      // sql`update company set ${sql(obj, ...keys)} where id = ${id} returning *`
+      const keys = Object.keys(clean);
+      const updated = await t<Array<Record<string, unknown>>>`
+        update public.company
+           set ${t(clean, ...keys)},
+               updated_at = now()
+         where id = ${id}
+        returning *
+      `;
+      if (updated.length === 0) {
+        throw new Error("company not found");
+      }
 
-  const { data, error } = await write
-    .from("companies")
-    .update({ ...clean, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const changedNotable = keys.filter((k) => NOTABLE.has(k));
+      if (changedNotable.length > 0) {
+        const bodyText = changedNotable
+          .map((k) => `${k}: ${JSON.stringify(clean[k])}`)
+          .join(" · ");
+        await t`
+          insert into public.activity
+            (company_id, contact_id, kind, subject, body, source_system, owner, raw)
+          values
+            (${id}, null, 'system_note'::activity_kind, 'Pipeline updated', ${bodyText},
+             'manual', 'user',
+             ${t.json({ channel: "pipeline", changes: clean as Record<string, unknown> } as unknown as Parameters<typeof t.json>[0])})
+        `;
+      }
 
-  // Log stage/tier changes to activities for audit trail
-  const notableKeys = ["rank_stage", "sponsor_tier", "keep", "is_customer", "summit_interest", "conferences"];
-  const changed = Object.keys(clean).filter((k) => notableKeys.includes(k));
-  if (changed.length > 0) {
-    await write.from("activities").insert({
-      company_id: id,
-      contact_id: null,
-      kind: "note",
-      subject: `Pipeline updated`,
-      body: changed.map((k) => `${k}: ${JSON.stringify(clean[k])}`).join(" · "),
-      source: "manual",
-      actor: "user",
-      meta: { channel: "pipeline", changes: clean },
+      return updated[0];
     });
-  }
 
-  return NextResponse.json({ company: data });
+    return NextResponse.json({ company: result });
+  } catch (e) {
+    const err = dbError(e);
+    const status = err.message === "company not found" ? 404 : 500;
+    return NextResponse.json({ error: err.message, code: err.code }, { status });
+  }
 }

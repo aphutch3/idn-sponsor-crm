@@ -14,7 +14,7 @@
 // JSONB values are auto-serialized by postgres.js — don't ::jsonb-cast on the app side.
 // For arrays, pass a JS array; postgres.js encodes to array literals correctly.
 
-import postgres, { Sql } from "postgres";
+import postgres, { Sql, TransactionSql } from "postgres";
 
 declare global {
   // Pool per Node.js process. Next.js can hot-reload modules; keep instances on globalThis
@@ -82,7 +82,7 @@ export const sqlRead = new Proxy({} as Sql, {
 /**
  * Convenience: run a fn inside a transaction. postgres.js handles BEGIN/COMMIT/ROLLBACK.
  */
-export async function tx<T>(fn: (t: Sql) => Promise<T>): Promise<T> {
+export async function tx<T>(fn: (t: TransactionSql) => Promise<T>): Promise<T> {
   return writePool().begin(fn) as Promise<T>;
 }
 
