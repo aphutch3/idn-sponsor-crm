@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { PageHeader, Card, Badge, Empty } from "@/components/ui";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
 type SegmentRow = {

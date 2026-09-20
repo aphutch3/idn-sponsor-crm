@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { PageHeader, Card } from "@/components/ui";
 import { fmtNum } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
 type BucketRow = { k: string; n: number };

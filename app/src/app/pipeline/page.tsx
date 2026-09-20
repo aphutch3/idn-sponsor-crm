@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { Card, PageHeader, Badge } from "@/components/ui";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
 const TIER_ORDER = [

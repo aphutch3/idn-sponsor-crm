@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { PageHeader, Card, Badge, Empty } from "@/components/ui";
 import { fmtDate } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 15;
 
 const AGENT_KINDS = [

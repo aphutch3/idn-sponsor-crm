@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { PageHeader, Card, Stat, Badge } from "@/components/ui";
 import { fmtNum } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
 // Cohort placeholders — replaced with live counts as each cohort ships.
