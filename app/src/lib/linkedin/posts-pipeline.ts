@@ -4,8 +4,10 @@
 // `profile_activity` in fetch_types. Handles a single entity (company
 // or contact) end-to-end and returns a per-entity summary the caller
 // can aggregate.
+//
+// Canonical singular tables: linkedin_post, linkedin_signal.
 
-import { dbWrite } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { fetchCompanyPosts, fetchProfilePosts, type RawPost } from "@/lib/apify/linkedin-posts";
 import { loadTopicTags } from "./tags";
 import { scorePostRelevance } from "./relevance";
@@ -33,10 +35,14 @@ export type RunPostsInput = {
   readonly limit?: number;
 };
 
+type ExistingPostRow = {
+  post_urn: string;
+  relevance_score: number | null;
+  scored_at: string | null;
+};
+
 /** Fetch, score, and persist posts for one entity. */
 export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEntitySummary> {
-  const supa = dbWrite();
-
   // 1. Fetch
   const fetched = input.entity_type === "company"
     ? await fetchCompanyPosts(input.linkedin_url, { limit: input.limit })
@@ -62,22 +68,22 @@ export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEnti
 
   // 2. Dedup vs existing rows for this entity (only score truly new posts)
   const urns = raw.map((p) => p.urn);
-  const { data: existing, error: exErr } = await supa
-    .from("linkedin_posts")
-    .select("post_urn, relevance_score, scored_at")
-    .in("post_urn", urns);
-  if (exErr) {
+  let existing: ExistingPostRow[] = [];
+  try {
+    existing = await sql<ExistingPostRow[]>`
+      select post_urn, relevance_score, scored_at
+        from public.linkedin_post
+       where post_urn in ${sql(urns)}
+    `;
+  } catch (e) {
     return {
       ok: false, fetched: raw.length, new_posts: 0, scored: 0, signals_emitted: 0,
-      error: `existing lookup: ${exErr.message}`,
+      error: `existing lookup: ${(e as Error).message}`,
     };
   }
   const seen = new Map<string, { relevance_score: number | null; scored_at: string | null }>();
-  for (const row of existing ?? []) {
-    seen.set((row as { post_urn: string }).post_urn, {
-      relevance_score: (row as { relevance_score: number | null }).relevance_score,
-      scored_at: (row as { scored_at: string | null }).scored_at,
-    });
+  for (const row of existing) {
+    seen.set(row.post_urn, { relevance_score: row.relevance_score, scored_at: row.scored_at });
   }
 
   const newPosts = raw.filter((p) => !seen.has(p.urn));
@@ -113,7 +119,9 @@ export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEnti
     }
   }
 
-  // 4. Upsert linkedin_posts (new + refresh last_fetched_at on existing)
+  // 4. Upsert linkedin_post (new + refresh last_fetched_at on existing).
+  //    Canonical uses ARRAY columns for keyword_hits + relevance_topics; postgres.js
+  //    encodes JS arrays via sql.array. jsonb `raw` goes through sql.json.
   const nowIso = new Date().toISOString();
   const rows = raw.map((p) => {
     const s = scored.find((x) => x.post.urn === p.urn);
@@ -128,7 +136,7 @@ export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEnti
       reactions: p.reactions ?? null,
       comments: p.comments ?? null,
       reposts: p.reposts ?? null,
-      raw: p.raw as unknown as object,
+      raw: p.raw as unknown,
       keyword_hits: s?.hits ?? [],
       relevance_score: s?.score ?? null,
       relevance_topics: s?.topics ?? [],
@@ -140,13 +148,74 @@ export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEnti
     };
   });
 
-  const { error: upErr } = await supa
-    .from("linkedin_posts")
-    .upsert(rows, { onConflict: "post_urn" });
-  if (upErr) {
+  // Row-by-row upsert keeps types simple and stable against postgres.js's
+  // helper-encoding of jsonb + text[] mixed rows. Batch sizes here are small
+  // (bounded by Apify's per-fetch limit).
+  try {
+    for (const r of rows) {
+      await sql`
+        insert into public.linkedin_post
+          (post_urn, entity_type, entity_id, posted_at, post_text, post_url,
+           media_kind, reactions, comments, reposts, raw,
+           keyword_hits, relevance_score, relevance_topics, relevance_reason,
+           scored_at, scorer_model, monitor_config_id, last_fetched_at)
+        values
+          (${r.post_urn},
+           ${r.entity_type},
+           ${r.entity_id},
+           ${r.posted_at},
+           ${r.post_text},
+           ${r.post_url},
+           ${r.media_kind},
+           ${r.reactions},
+           ${r.comments},
+           ${r.reposts},
+           ${sql.json((r.raw ?? {}) as unknown as Parameters<typeof sql.json>[0])},
+           ${sql.array(r.keyword_hits)}::text[],
+           ${r.relevance_score},
+           ${sql.array(r.relevance_topics)}::text[],
+           ${r.relevance_reason},
+           ${r.scored_at},
+           ${r.scorer_model},
+           ${r.monitor_config_id},
+           ${r.last_fetched_at})
+        on conflict (post_urn) do update set
+          entity_type       = excluded.entity_type,
+          entity_id         = excluded.entity_id,
+          posted_at         = coalesce(excluded.posted_at, linkedin_post.posted_at),
+          post_text         = coalesce(excluded.post_text, linkedin_post.post_text),
+          post_url          = coalesce(excluded.post_url, linkedin_post.post_url),
+          media_kind        = coalesce(excluded.media_kind, linkedin_post.media_kind),
+          reactions         = coalesce(excluded.reactions, linkedin_post.reactions),
+          comments          = coalesce(excluded.comments, linkedin_post.comments),
+          reposts           = coalesce(excluded.reposts, linkedin_post.reposts),
+          raw               = excluded.raw,
+          keyword_hits      = case when excluded.scored_at is not null
+                                   then excluded.keyword_hits
+                                   else linkedin_post.keyword_hits end,
+          relevance_score   = case when excluded.scored_at is not null
+                                   then excluded.relevance_score
+                                   else linkedin_post.relevance_score end,
+          relevance_topics  = case when excluded.scored_at is not null
+                                   then excluded.relevance_topics
+                                   else linkedin_post.relevance_topics end,
+          relevance_reason  = case when excluded.scored_at is not null
+                                   then excluded.relevance_reason
+                                   else linkedin_post.relevance_reason end,
+          scored_at         = case when excluded.scored_at is not null
+                                   then excluded.scored_at
+                                   else linkedin_post.scored_at end,
+          scorer_model      = case when excluded.scored_at is not null
+                                   then excluded.scorer_model
+                                   else linkedin_post.scorer_model end,
+          monitor_config_id = excluded.monitor_config_id,
+          last_fetched_at   = excluded.last_fetched_at
+      `;
+    }
+  } catch (e) {
     return {
       ok: false, fetched: raw.length, new_posts: newPosts.length, scored: scored.length, signals_emitted: 0,
-      error: `upsert posts: ${upErr.message}`,
+      error: `upsert posts: ${(e as Error).message}`,
     };
   }
 
@@ -161,36 +230,40 @@ export async function runPostsForEntity(input: RunPostsInput): Promise<PostsEnti
 
   let signals_emitted = 0;
   if (worthy.length > 0) {
-    const sigRows = worthy.map((s) => ({
-      entity_type: input.entity_type,
-      entity_id: input.entity_id,
-      signal_kind: "new_post" as const,
-      snapshot_id: null,
-      meta: {
-        monitor_config_id: input.monitor_config_id,
-        post_urn: s.post.urn,
-        post_url: s.post.url,
-        posted_at: s.post.posted_at_iso,
-        snippet: (s.post.text ?? "").slice(0, 500),
-        score: s.score,
-        topics: s.topics,
-        reason: s.reason,
-        reactions: s.post.reactions,
-        comments: s.post.comments,
-        reposts: s.post.reposts,
-        scorer_model: s.model,
-      },
-    }));
-    const { error: sigErr, count } = await supa
-      .from("linkedin_signals")
-      .insert(sigRows, { count: "exact" });
-    if (sigErr) {
+    try {
+      for (const s of worthy) {
+        const meta = {
+          monitor_config_id: input.monitor_config_id,
+          post_urn: s.post.urn,
+          post_url: s.post.url,
+          posted_at: s.post.posted_at_iso,
+          snippet: (s.post.text ?? "").slice(0, 500),
+          score: s.score,
+          topics: s.topics,
+          reason: s.reason,
+          reactions: s.post.reactions,
+          comments: s.post.comments,
+          reposts: s.post.reposts,
+          scorer_model: s.model,
+        };
+        await sql`
+          insert into public.linkedin_signal
+            (entity_type, entity_id, signal_kind, snapshot_id, meta)
+          values
+            (${input.entity_type},
+             ${input.entity_id},
+             ${"new_post"},
+             ${null},
+             ${sql.json(meta as unknown as Parameters<typeof sql.json>[0])})
+        `;
+      }
+      signals_emitted = worthy.length;
+    } catch (e) {
       return {
         ok: false, fetched: raw.length, new_posts: newPosts.length, scored: scored.length, signals_emitted: 0,
-        error: `emit signals: ${sigErr.message}`,
+        error: `emit signals: ${(e as Error).message}`,
       };
     }
-    signals_emitted = count ?? worthy.length;
   }
 
   return {

@@ -1,9 +1,13 @@
 // LinkedIn monitor orchestrator.
-// Consumes lists via list_bindings, fetches via Firecrawl, snapshots + diffs,
-// emits linkedin_signals rows. Never throws — every error is captured into the
+// Consumes lists via list_binding, fetches via Firecrawl, snapshots + diffs,
+// emits linkedin_signal rows. Never throws — every error is captured into the
 // snapshot row or the config's meta.paused_reason.
+//
+// Canonical singular tables:
+//   list_binding, linkedin_monitor_config, linkedin_snapshot, linkedin_signal
+// company/contact resolved from public.company / public.contact.
 
-import { dbWrite } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { effectiveMembers, type ListId } from "@/lib/lists";
 import { firecrawlConfigured } from "@/lib/firecrawl/client";
 import { apifyLinkedinConfigured } from "@/lib/apify/linkedin-actors";
@@ -45,7 +49,12 @@ type MonitorConfigRow = {
   score_posts: boolean;
 };
 
-type ListBindingRow = { id: string; list_id: string; honor_suppressions: boolean; suppression_list_ids: string[] };
+type ListBindingRow = {
+  id: string;
+  list_id: string;
+  honor_suppressions: boolean;
+  suppression_list_ids: string[] | null;
+};
 
 // Hard cap per invocation regardless of config — Vercel timeout safety.
 const GLOBAL_FETCH_CAP = 30;
@@ -57,7 +66,6 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 async function loadLinkedinUrls(
   entities: readonly { entity_type: "company" | "contact"; entity_id: string }[],
 ): Promise<Map<string, string | null>> {
-  const supa = dbWrite();
   const byType = new Map<"company" | "contact", string[]>();
   for (const e of entities) {
     const arr = byType.get(e.entity_type) ?? [];
@@ -68,11 +76,24 @@ async function loadLinkedinUrls(
   const out = new Map<string, string | null>();
   for (const [entityType, ids] of byType.entries()) {
     if (ids.length === 0) continue;
-    const table = entityType === "company" ? "companies" : "contacts";
-    const { data, error } = await supa.from(table).select("id, linkedin_url").in("id", ids);
-    if (error) continue;
-    for (const row of (data ?? []) as { id: string; linkedin_url: string | null }[]) {
-      out.set(`${entityType}:${row.id}`, row.linkedin_url);
+    try {
+      const rows =
+        entityType === "company"
+          ? await sql<{ id: string; linkedin_url: string | null }[]>`
+              select id, linkedin_url
+                from public.company
+               where id in ${sql(ids)}
+            `
+          : await sql<{ id: string; linkedin_url: string | null }[]>`
+              select id, linkedin_url
+                from public.contact
+               where id in ${sql(ids)}
+            `;
+      for (const row of rows) {
+        out.set(`${entityType}:${row.id}`, row.linkedin_url);
+      }
+    } catch {
+      // On lookup failure, leave URLs unresolved — the caller silently skips them.
     }
   }
   return out;
@@ -85,18 +106,21 @@ async function loadPriorSnapshot(
   entityId: string,
   fetchType: LinkedinFetchType,
 ): Promise<{ id: string; content_hash: string; parsed: Parsed } | null> {
-  const supa = dbWrite();
-  const { data, error } = await supa
-    .from("linkedin_snapshots")
-    .select("id, content_hash, parsed")
-    .eq("entity_type", entityType)
-    .eq("entity_id", entityId)
-    .eq("fetch_type", fetchType)
-    .order("fetched_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return { id: data.id, content_hash: data.content_hash, parsed: data.parsed as Parsed };
+  try {
+    const rows = await sql<{ id: string; content_hash: string; parsed: Parsed }[]>`
+      select id, content_hash, parsed
+        from public.linkedin_snapshot
+       where entity_type = ${entityType}
+         and entity_id   = ${entityId}
+         and fetch_type  = ${fetchType}
+       order by fetched_at desc
+       limit 1
+    `;
+    if (rows.length === 0) return null;
+    return { id: rows[0].id, content_hash: rows[0].content_hash, parsed: rows[0].parsed };
+  } catch {
+    return null;
+  }
 }
 
 // -- main entry point ------------------------------------------------------
@@ -113,8 +137,6 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
     paused: false as boolean,
   };
 
-  const supa = dbWrite();
-
   // At least one fetcher must be configured. Apify is required for LinkedIn URLs.
   if (!apifyLinkedinConfigured() && !firecrawlConfigured()) {
     return { ...summary, reason: "neither APIFY_TOKEN nor FIRECRAWL_API_KEY is set" };
@@ -123,24 +145,38 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
     return { ...summary, reason: "APIFY_TOKEN not set — LinkedIn fetches will fail" };
   }
 
-  const { data: cfg, error: cErr } = await supa
-    .from("linkedin_monitor_configs")
-    .select("id, name, list_binding_id, fetch_types, cadence_seconds, jitter_seconds, batch_size, per_fetch_delay_ms, active, last_run_at, next_run_at, run_cursor, meta, relevance_min_score, topic_filter, score_posts")
-    .eq("id", configId)
-    .maybeSingle();
-  if (cErr || !cfg) return { ...summary, reason: `config not found: ${cErr?.message ?? "no row"}` };
-  const config = cfg as MonitorConfigRow;
+  let config: MonitorConfigRow;
+  try {
+    const rows = await sql<MonitorConfigRow[]>`
+      select id, name, list_binding_id, fetch_types, cadence_seconds, jitter_seconds,
+             batch_size, per_fetch_delay_ms, active, last_run_at, next_run_at,
+             run_cursor, meta, relevance_min_score, topic_filter, score_posts
+        from public.linkedin_monitor_config
+       where id = ${configId}
+       limit 1
+    `;
+    if (rows.length === 0) return { ...summary, reason: "config not found: no row" };
+    config = rows[0];
+  } catch (e) {
+    return { ...summary, reason: `config not found: ${(e as Error).message}` };
+  }
 
   if (!config.active && !opts?.force) return { ...summary, reason: "config inactive" };
   if (!config.list_binding_id) return { ...summary, reason: "config has no list_binding_id" };
 
-  const { data: binding, error: bErr } = await supa
-    .from("list_bindings")
-    .select("id, list_id, honor_suppressions, suppression_list_ids")
-    .eq("id", config.list_binding_id)
-    .maybeSingle();
-  if (bErr || !binding) return { ...summary, reason: `list binding not found: ${bErr?.message ?? "no row"}` };
-  const bind = binding as ListBindingRow;
+  let bind: ListBindingRow;
+  try {
+    const rows = await sql<ListBindingRow[]>`
+      select id, list_id, honor_suppressions, suppression_list_ids
+        from public.list_binding
+       where id = ${config.list_binding_id}
+       limit 1
+    `;
+    if (rows.length === 0) return { ...summary, reason: "list binding not found: no row" };
+    bind = rows[0];
+  } catch (e) {
+    return { ...summary, reason: `list binding not found: ${(e as Error).message}` };
+  }
 
   const membersRes = await effectiveMembers(bind.list_id as ListId, {
     honor_suppressions: bind.honor_suppressions,
@@ -153,10 +189,19 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
   const members = membersRes.value;
   summary.members_considered = members.length;
   if (members.length === 0) {
-    await supa.from("linkedin_monitor_configs").update({
-      last_run_at: new Date().toISOString(),
-      next_run_at: new Date(Date.now() + config.cadence_seconds * 1000).toISOString(),
-    }).eq("id", config.id);
+    const nowIso = new Date().toISOString();
+    const nextRunAt = new Date(Date.now() + config.cadence_seconds * 1000).toISOString();
+    try {
+      await sql`
+        update public.linkedin_monitor_config
+           set last_run_at = ${nowIso},
+               next_run_at = ${nextRunAt},
+               updated_at  = now()
+         where id = ${config.id}
+      `;
+    } catch {
+      // swallow — reporting the empty-list case is more useful than the update
+    }
     return { ...summary, ran: true, reason: "list has 0 effective members" };
   }
 
@@ -183,7 +228,7 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
 
       // ------------------------------------------------------------------
       // Posts fetch types: parallel pipeline (dedup by post_urn, score with
-      // Perplexity, emit new_post signals). Does NOT touch linkedin_snapshots.
+      // Perplexity, emit new_post signals). Does NOT touch linkedin_snapshot.
       // ------------------------------------------------------------------
       const isCompanyPosts = fetchType === "company_posts" && member.entity_type === "company";
       const isProfilePosts = fetchType === "profile_activity" && member.entity_type === "contact";
@@ -231,18 +276,26 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
 
       if (!scrape.success) {
         // Persist failed snapshot for observability
-        await supa.from("linkedin_snapshots").insert({
-          entity_type: member.entity_type,
-          entity_id: member.entity_id,
-          fetch_type: fetchType,
-          source_url: built.url,
-          http_status: scrape.status_code ?? null,
-          content_hash: "error",
-          parsed: {},
-          monitor_config_id: config.id,
-          error: scrape.error,
-          fetched_at: nowIso,
-        });
+        try {
+          await sql`
+            insert into public.linkedin_snapshot
+              (entity_type, entity_id, fetch_type, source_url, http_status,
+               content_hash, parsed, monitor_config_id, error, fetched_at)
+            values
+              (${member.entity_type},
+               ${member.entity_id},
+               ${fetchType},
+               ${built.url},
+               ${scrape.status_code ?? null},
+               ${"error"},
+               ${sql.json({} as unknown as Parameters<typeof sql.json>[0])},
+               ${config.id},
+               ${scrape.error ?? null},
+               ${nowIso})
+          `;
+        } catch {
+          // if the insert itself fails, still count the error and keep going
+        }
         summary.errors++;
 
         // Pause the config if LinkedIn is signaling us to back off
@@ -259,19 +312,30 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
 
       const prior = await loadPriorSnapshot(member.entity_type, member.entity_id, fetchType);
 
-      const { data: inserted, error: insErr } = await supa.from("linkedin_snapshots").insert({
-        entity_type: member.entity_type,
-        entity_id: member.entity_id,
-        fetch_type: fetchType,
-        source_url: built.url,
-        http_status: scrape.status_code,
-        content_hash: hash,
-        parsed,
-        monitor_config_id: config.id,
-        fetched_at: nowIso,
-      }).select("id").single();
-
-      if (insErr || !inserted) {
+      let inserted: { id: string } | null = null;
+      try {
+        const rows = await sql<{ id: string }[]>`
+          insert into public.linkedin_snapshot
+            (entity_type, entity_id, fetch_type, source_url, http_status,
+             content_hash, parsed, monitor_config_id, fetched_at)
+          values
+            (${member.entity_type},
+             ${member.entity_id},
+             ${fetchType},
+             ${built.url},
+             ${scrape.status_code},
+             ${hash},
+             ${sql.json(parsed as unknown as Parameters<typeof sql.json>[0])},
+             ${config.id},
+             ${nowIso})
+          returning id
+        `;
+        inserted = rows[0] ?? null;
+      } catch {
+        summary.errors++;
+        continue;
+      }
+      if (!inserted) {
         summary.errors++;
         continue;
       }
@@ -280,19 +344,34 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
       if (prior && prior.content_hash !== hash) {
         const signals = diff(prior.parsed, parsed);
         if (signals.length > 0) {
-          const rows = signals.map((s) => ({
-            entity_type: member.entity_type,
-            entity_id: member.entity_id,
-            snapshot_id: inserted.id,
-            prior_snapshot_id: prior.id,
-            signal_kind: s.signal_kind,
-            before_value: s.before_value,
-            after_value: s.after_value,
-            meta: { field: s.field },
-          }));
-          const { error: sigErr } = await supa.from("linkedin_signals").insert(rows);
-          if (sigErr) summary.errors++;
-          else summary.signals_emitted += rows.length;
+          try {
+            const signalRows = signals.map((s) => ({
+              entity_type: member.entity_type,
+              entity_id: member.entity_id,
+              snapshot_id: inserted!.id,
+              prior_snapshot_id: prior.id,
+              signal_kind: s.signal_kind,
+              before_value: s.before_value as unknown,
+              after_value: s.after_value as unknown,
+              meta: { field: s.field } as unknown,
+            }));
+            await sql`
+              insert into public.linkedin_signal ${sql(
+                signalRows as unknown as Parameters<typeof sql>[0],
+                "entity_type",
+                "entity_id",
+                "snapshot_id",
+                "prior_snapshot_id",
+                "signal_kind",
+                "before_value",
+                "after_value",
+                "meta",
+              )}
+            `;
+            summary.signals_emitted += signalRows.length;
+          } catch {
+            summary.errors++;
+          }
         }
       }
     }
@@ -304,16 +383,39 @@ export async function runMonitor(configId: string, opts?: { force?: boolean }): 
     ? null
     : new Date(Date.now() + config.cadence_seconds * 1000 + jitter).toISOString();
 
-  const updatePatch: Record<string, unknown> = {
-    last_run_at: new Date().toISOString(),
-    run_cursor: { ...(config.run_cursor ?? {}), offset: newOffset },
-    ...(nextRunAt ? { next_run_at: nextRunAt } : {}),
-  };
-  if (paused) {
-    updatePatch["active"] = false;
-    updatePatch["meta"] = { ...(config.meta ?? {}), paused_reason: pausedReason, paused_at: new Date().toISOString() };
+  const nextCursor = { ...(config.run_cursor ?? {}), offset: newOffset };
+  const nowIso = new Date().toISOString();
+
+  try {
+    if (paused) {
+      const nextMeta = {
+        ...(config.meta ?? {}),
+        paused_reason: pausedReason,
+        paused_at: nowIso,
+      };
+      await sql`
+        update public.linkedin_monitor_config
+           set last_run_at = ${nowIso},
+               run_cursor  = ${sql.json(nextCursor as unknown as Parameters<typeof sql.json>[0])},
+               active      = false,
+               meta        = ${sql.json(nextMeta as unknown as Parameters<typeof sql.json>[0])},
+               updated_at  = now()
+         where id = ${config.id}
+      `;
+    } else {
+      await sql`
+        update public.linkedin_monitor_config
+           set last_run_at = ${nowIso},
+               run_cursor  = ${sql.json(nextCursor as unknown as Parameters<typeof sql.json>[0])},
+               next_run_at = ${nextRunAt},
+               updated_at  = now()
+         where id = ${config.id}
+      `;
+    }
+  } catch {
+    // Don't fail the entire run just because we couldn't update the cursor;
+    // the summary is still meaningful to the caller.
   }
-  await supa.from("linkedin_monitor_configs").update(updatePatch).eq("id", config.id);
 
   return {
     ...summary,
@@ -329,19 +431,24 @@ export async function runDueConfigs(opts?: { max_configs?: number }): Promise<{
   configs_processed: number;
   summaries: MonitorRunSummary[];
 }> {
-  const supa = dbWrite();
   const maxConfigs = Math.max(1, Math.min(opts?.max_configs ?? 5, 10));
 
-  const { data: due } = await supa
-    .from("linkedin_monitor_configs")
-    .select("id")
-    .eq("active", true)
-    .lte("next_run_at", new Date().toISOString())
-    .order("next_run_at", { ascending: true })
-    .limit(maxConfigs);
+  let due: { id: string }[] = [];
+  try {
+    due = await sql<{ id: string }[]>`
+      select id
+        from public.linkedin_monitor_config
+       where active = true
+         and next_run_at <= now()
+       order by next_run_at asc
+       limit ${maxConfigs}
+    `;
+  } catch {
+    return { configs_processed: 0, summaries: [] };
+  }
 
   const summaries: MonitorRunSummary[] = [];
-  for (const row of (due ?? []) as { id: string }[]) {
+  for (const row of due) {
     summaries.push(await runMonitor(row.id));
   }
   return { configs_processed: summaries.length, summaries };
