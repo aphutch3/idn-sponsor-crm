@@ -102,3 +102,37 @@ values
 on conflict (schema_name, table_name, column_name) do update
   set meaning = excluded.meaning, authority = excluded.authority,
       null_meaning = excluded.null_meaning, is_derived = excluded.is_derived;
+
+-- ------------------------------------------------- conference source fields
+-- v3 modelled a conference as identity plus dates. The scraper carries three
+-- more fields on every row and the legacy table exposes them, so without these
+-- the compat view cannot reproduce its shape.
+--
+-- These follow the precedent already set by signals.speaker_profile, which
+-- carries synced_at as a real column rather than as raw provenance: for a
+-- scraped domain, "when did we last see this upstream" is an answer the app
+-- and any agent needs to reason about staleness, and burying it in jsonb makes
+-- it unqueryable without a cast.
+--
+--   status       3/3 non-null, 1 distinct ('active') -- lifecycle, not sync
+--   ingested_at  3/3 non-null, distinct per conference -- first seen
+--   synced_at    3/3 non-null, identical across all rows -- last scrape pass
+--
+-- status is deliberately NOT an enum. One observed value is not enough
+-- evidence to close the set, and a CHECK that only ever admits 'active' would
+-- reject the first cancelled or archived event without adding any safety.
+alter table signals.conference
+  add column if not exists status      text,
+  add column if not exists ingested_at timestamptz,
+  add column if not exists synced_at   timestamptz;
+
+comment on column signals.conference.status is
+  'Lifecycle state from the source (observed: active). Open text by design.';
+comment on column signals.conference.ingested_at is
+  'When this conference was first ingested upstream. Distinct per conference.';
+comment on column signals.conference.synced_at is
+  'When the upstream scrape last refreshed this row. Staleness signal.';
+
+-- Staleness scans read this without touching the wide row.
+create index if not exists conference_synced_at_idx
+  on signals.conference (synced_at desc nulls last);

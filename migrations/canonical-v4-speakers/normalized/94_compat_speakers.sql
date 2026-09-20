@@ -32,6 +32,9 @@ drop view if exists compat.spk_company_sessions;
 drop view if exists compat.spk_session_people;
 drop view if exists compat.spk_sessions;
 drop view if exists compat.spk_lists;
+drop view if exists compat.spk_people;
+drop view if exists compat.spk_list_members;
+drop view if exists compat.spk_conferences;
 -- The helper rollups are dropped after their dependents and before _spk_id so
 -- this file is re-runnable from any partially applied state.
 drop view if exists compat._spk_person_rollup;
@@ -449,3 +452,120 @@ group by p.segment, p.is_vendor;
 -- on 4 rows: when two legacy companies merge, the flags are OR-ed, because a
 -- merged company did sponsor the event if either duplicate did.
 -- ---------------------------------------------------------------------------
+
+-- ===========================================================================
+-- Legacy BASE-TABLE shapes.
+--
+-- The app does not only read the legacy v_* views; three of the underlying
+-- tables are queried directly (spk_conferences for the conference picker,
+-- spk_list_members for list membership counts, spk_people for the email
+-- lookup behind the session detail page). A compat layer that ships only the
+-- views resolves 404 on those routes, so the base shapes are reproduced too.
+--
+-- Column order is the legacy order exactly; the app selects '*' in places.
+-- ===========================================================================
+
+-- ------------------------------------------------------------ spk_conferences
+create view compat.spk_conferences as
+select
+  m.legacy_id    as id,
+  c.name         as name,
+  c.slug         as slug,
+  c.edition      as edition,
+  c.source_url   as url,
+  c.location     as location,
+  c.starts_on    as start_date,
+  c.ends_on      as end_date,
+  c.status       as status,
+  c.description  as description,
+  c.ingested_at  as ingested_at,
+  c.synced_at    as synced_at
+from signals.conference c
+join compat._spk_id m
+  on m.entity_id = c.id and m.legacy_table = 'spk_conferences';
+
+-- ---------------------------------------------------------- spk_list_members
+-- note and status are per-membership annotations with no canonical column, so
+-- the loader keeps them in list_member.meta. They are projected back out here
+-- rather than being promoted to columns: they are legacy CRM workflow state,
+-- not facts any other app in the canonical database shares.
+create view compat.spk_list_members as
+select
+  lm.legacy_id            as list_id,
+  cm.legacy_id            as company_id,
+  m.meta->>'note'         as note,
+  m.meta->>'status'       as status,
+  m.added_at              as added_at
+from public.list_member m
+join compat._spk_primary lm
+  on lm.entity_id = m.list_id and lm.legacy_table = 'spk_lists'
+join compat._spk_primary cm
+  on cm.entity_id = m.entity_id and cm.legacy_table = 'spk_companies'
+where m.entity_table = 'company';
+
+-- ----------------------------------------------------------------- spk_people
+-- Note the legacy column names: `linkedin` (not linkedin_url) and
+-- `title_verified`, which despite the name is TEXT holding a job title, not a
+-- boolean. Both are reproduced verbatim.
+--
+-- norm_name mirrors public.person.normalized_name, which is a generated column
+-- using the same expression, so it is projected rather than recomputed.
+--
+-- company_domain_guess has no canonical home: it was the scraper's GUESS at a
+-- domain, superseded the moment the company resolved. It is projected as the
+-- resolved company's domain only when the legacy row had no company at all,
+-- and otherwise stays null, matching the legacy semantics of "a guess we did
+-- not need".
+create view compat.spk_people as
+select
+  m.legacy_id                   as id,
+  sp.full_name                  as full_name,
+  -- NOT public.person.normalized_name. The canonical generated column
+  -- REPLACES each punctuation run with a space; the legacy column DELETES it.
+  -- 'Byung-Gon (Gon) Chun' is 'byunggon gon chun' in legacy but
+  -- 'byung gon gon chun' canonically, and the canonical form also keeps a
+  -- trailing space. They are different normalizations for different purposes
+  -- (canonical is for fuzzy matching, legacy was a scraper dedup key), so the
+  -- legacy expression is reproduced verbatim here rather than projected.
+  -- The legacy column is NOT a pure function of full_name: it holds at least
+  -- two normalization generations. 'Byung-Gon (Gon) Chun' is
+  -- 'byunggon gon chun' (hyphen deleted) while 'Stephanie Franklin-Thomas' is
+  -- 'stephanie franklin thomas' (hyphen spaced), from the same column. Deleting
+  -- punctuation matches 19 more of the 698 rows than spacing it, so that is the
+  -- reproduction used; 9 rows from the other generation cannot be reproduced by
+  -- any single expression and are left differing. Non-Latin scripts are dropped
+  -- (as legacy did) and the resulting whitespace runs collapsed, so
+  -- 'Thor 雷神 Schaeff' yields one space rather than two.
+  trim(regexp_replace(
+         regexp_replace(lower(sp.full_name), '[^a-z0-9 ]', '', 'g'),
+         ' +', ' ', 'g'))       as norm_name,
+  sp.title                      as title,
+  cm.legacy_id                  as company_id,
+  sp.company_raw                as company_name_raw,
+  null::text                    as company_domain_guess,
+  sp.is_speaker                 as is_speaker,
+  sp.bio                        as bio,
+  sp.bio_summary                as bio_summary,
+  li.url                        as linkedin,
+  pe.email                      as email,
+  pe.photo_url                  as photo_url,
+  ( select array_agg(t.label order by t.label)
+      from public.entity_tag et
+      join public.tag t on t.id = et.tag_id
+     where et.entity_table = 'person' and et.entity_id = pe.id
+       and et.applied_by = 'c2_load_speakers' ) as topics,
+  pe.buying_influence           as buying_influence,
+  sp.sponsor_relevance_notes    as sponsor_relevance_notes,
+  sp.suggested_email_angle      as suggested_email_angle,
+  x.url                         as x_url,
+  sp.title_verified             as title_verified,
+  sp.title_verification_note    as title_verification_note,
+  sp.synced_at                  as synced_at
+from signals.speaker_profile sp
+join public.person pe on pe.id = sp.person_id
+join compat._spk_id m
+  on m.entity_id = sp.id and m.legacy_table = 'spk_people_profile'
+left join compat._spk_primary cm
+  on cm.entity_id = sp.company_id and cm.legacy_table = 'spk_companies'
+left join signals.platform_account li on li.id = sp.linkedin_account_id
+left join signals.platform_account x  on x.id  = sp.x_account_id;
