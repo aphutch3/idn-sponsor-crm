@@ -42,6 +42,7 @@ type ContactRow = {
   first_name: string | null;
   last_name: string | null;
   unsubscribed_all_email: boolean | null;
+  suppressed: boolean;
 };
 
 export async function POST(req: NextRequest) {
@@ -56,9 +57,12 @@ export async function POST(req: NextRequest) {
   let contact: ContactRow | null = null;
   try {
     const rows = await sql<ContactRow[]>`
-      select id, email, first_name, last_name, unsubscribed_all_email
-        from public.contact
-       where id = ${contact_id}
+      select c.id, c.email, c.first_name, c.last_name, c.unsubscribed_all_email,
+             (coalesce(c.unsubscribed_all,false) OR coalesce(c.unsubscribed_all_email,false)
+              OR coalesce(c.opted_out_marketing,false) OR coalesce(p.do_not_contact,false)
+              OR coalesce(p.do_not_market,false)) AS suppressed
+        from public.contact c LEFT JOIN public.person p ON p.id=c.person_id
+       where c.id = ${contact_id}
        limit 1
     `;
     contact = rows[0] ?? null;
@@ -68,7 +72,7 @@ export async function POST(req: NextRequest) {
   }
   if (!contact) return NextResponse.json({ error: "contact not found" }, { status: 404 });
   if (!contact.email) return NextResponse.json({ error: "contact has no email" }, { status: 400 });
-  if (contact.unsubscribed_all_email) {
+  if (contact.suppressed) {
     return NextResponse.json({ error: "contact has unsubscribed" }, { status: 400 });
   }
 
@@ -143,13 +147,9 @@ export async function POST(req: NextRequest) {
          where id = ${sendId}
       `;
       await sql`
-        insert into public.campaign_send_event
-          (send_id, event_kind, occurred_at, raw)
-        values
-          (${sendId},
-           ${"sent"},
-           ${nowIso},
-           ${sql.json({ provider: "resend", provider_message_id: j.id ?? null } as unknown as Parameters<typeof sql.json>[0])})
+        select public.record_campaign_send_event(
+          ${sendId},'sent',${nowIso},'resend',${`sent:${j.id ?? sendId}`},NULL,
+          ${sql.json({ provider: "resend", provider_message_id: j.id ?? null } as unknown as Parameters<typeof sql.json>[0])})
       `;
     } catch (e) {
       // The message went out; a rollup failure shouldn't fail the API.
@@ -166,10 +166,12 @@ export async function POST(req: NextRequest) {
     try {
       await sql`
         update public.campaign_send
-           set status = ${"failed"},
-               error  = ${msg}
+           set error = ${msg}
          where id = ${sendId}
       `;
+      await sql`select public.record_campaign_send_event(
+        ${sendId},'failed',${new Date().toISOString()},'resend',${`failed:${sendId}`},NULL,
+        ${sql.json({error:msg})})`;
     } catch {
       // best-effort; do not shadow the original error
     }

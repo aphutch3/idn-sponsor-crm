@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -26,10 +27,9 @@ export async function GET(req: NextRequest) {
       const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
       const referrer = req.headers.get("referer");
       await sql`
-        insert into public.campaign_send_event
-          (send_id, event_kind, occurred_at, user_agent, ip_address, referrer)
-        values
-          (${s}, ${"opened"}, ${new Date().toISOString()}, ${ua}, ${ip}, ${referrer})
+        select public.record_campaign_send_event(
+          ${s},'opened',${new Date().toISOString()},'tracking',${randomUUID()},NULL,
+          ${sql.json({user_agent:ua,ip_address:ip,referrer})})
       `;
     } catch {
       // never let a tracker error affect the pixel response
