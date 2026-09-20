@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { admin } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { PageHeader, Badge, Stat, Card, TableShell } from "@/components/ui";
 import { fmtNum } from "@/lib/utils";
 
@@ -47,19 +47,53 @@ export default async function SpeakersPage({ searchParams }: { searchParams: { t
   const q = (searchParams.q || "").trim();
   const summitSlug = searchParams.summit || SUMMITS[0].slug;
 
-  const db = admin();
+  const like = q ? `%${q.replace(/[%_]/g, "")}%` : null;
+
+  type RosterRow = {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    job_title: string | null;
+    lead_status: string | null;
+    emails_opened: number | null;
+    emails_clicked: number | null;
+    emails_replied: number | null;
+    key_contact: string[] | null;
+    company_id: string | null;
+    company_name: string | null;
+  };
 
   // Roster query — real SPEAKER-tagged contacts
-  let rosterQ = db.from("contacts")
-    .select("id, first_name, last_name, email, job_title, lead_status, emails_opened, emails_clicked, emails_replied, key_contact, company_id, companies(id, name)")
-    .contains("key_contact", ["SPEAKER"])
-    .order("emails_opened", { ascending: false, nullsFirst: false });
-  if (q) rosterQ = rosterQ.or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,job_title.ilike.%${q}%`);
-  const { data: roster, count: rosterCount } = await rosterQ.limit(200);
+  const roster = await sql<RosterRow[]>`
+    select
+      c.id, c.first_name, c.last_name, c.email, c.job_title, c.lead_status,
+      c.emails_opened, c.emails_clicked, c.emails_replied, c.key_contact,
+      c.company_id, co.name as company_name
+    from public.contact c
+    left join public.company co on co.id = c.company_id
+    where c.key_contact @> array['SPEAKER']::text[]
+      ${like ? sql`and (
+           c.first_name ilike ${like}
+        or c.last_name  ilike ${like}
+        or c.email      ilike ${like}
+        or c.job_title  ilike ${like}
+      )` : sql``}
+    order by c.emails_opened desc nulls last
+    limit 200
+  `;
 
-  // KPIs for the header
-  const { count: totalSpeakers } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]);
-  const { count: openStatus } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]).eq("lead_status", "Open");
+  // KPIs for the header (single query)
+  const [k] = await sql<Array<{ total: number; open_status: number }>>`
+    select
+      count(*)::int as total,
+      count(*) filter (where lead_status = 'Open')::int as open_status
+    from public.contact
+    where key_contact @> array['SPEAKER']::text[]
+  `;
+  const totalSpeakers = k?.total ?? 0;
+  const openStatus = k?.open_status ?? 0;
+  const rosterCount = roster.length;
 
   return (
     <div className="p-8 max-w-6xl">
@@ -118,7 +152,7 @@ export default async function SpeakersPage({ searchParams }: { searchParams: { t
               </tr>
             </thead>
             <tbody>
-              {(roster || []).map((c: any) => (
+              {roster.map((c) => (
                 <tr key={c.id} className="border-b border-border/50 hover:bg-subtle/50">
                   <td className="px-4 py-2">
                     <Link href={`/influencers/speakers/${c.id}`} className="hover:text-accent">
@@ -127,16 +161,16 @@ export default async function SpeakersPage({ searchParams }: { searchParams: { t
                     </Link>
                   </td>
                   <td className="px-4 py-2">
-                    {c.companies ? (
-                      <Link href={`/companies/${c.companies.id}`} className="text-sm hover:text-accent">{c.companies.name}</Link>
+                    {c.company_id && c.company_name ? (
+                      <Link href={`/companies/${c.company_id}`} className="text-sm hover:text-accent">{c.company_name}</Link>
                     ) : <span className="text-muted text-sm">—</span>}
                   </td>
                   <td className="px-4 py-2 text-muted text-sm">{c.job_title || "—"}</td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap gap-1">
                       {c.lead_status && <Badge tone="muted">{c.lead_status}</Badge>}
-                      {(c.key_contact || []).filter((k: string) => k !== "SPEAKER").slice(0, 2).map((k: string) => (
-                        <Badge key={k} tone="accent">{k}</Badge>
+                      {(c.key_contact || []).filter((tag: string) => tag !== "SPEAKER").slice(0, 2).map((tag: string) => (
+                        <Badge key={tag} tone="accent">{tag}</Badge>
                       ))}
                     </div>
                   </td>
@@ -145,7 +179,7 @@ export default async function SpeakersPage({ searchParams }: { searchParams: { t
                   </td>
                 </tr>
               ))}
-              {(!roster || roster.length === 0) && (
+              {roster.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-muted">No speakers match your search.</td></tr>
               )}
             </tbody>

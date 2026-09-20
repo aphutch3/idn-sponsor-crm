@@ -1,23 +1,52 @@
 import Link from "next/link";
-import { admin } from "@/lib/supabase";
+import { sql, maybeSingle } from "@/lib/db";
 import { PageHeader, Badge, Card, Stat } from "@/components/ui";
 import { notFound } from "next/navigation";
 
 export const revalidate = 30;
 
+type SpeakerRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  job_title: string | null;
+  lead_status: string | null;
+  emails_opened: number | null;
+  emails_clicked: number | null;
+  emails_replied: number | null;
+  key_contact: string[] | null;
+  phone: string | null;
+  linkedin_url: string | null;
+  company_id: string | null;
+  company_name: string | null;
+  company_industry: string | null;
+  company_website_url: string | null;
+};
+
 export default async function SpeakerDetailPage({ params }: { params: { id: string } }) {
-  const db = admin();
-  const { data: c, error } = await db.from("contacts")
-    .select("id, first_name, last_name, email, job_title, lead_status, emails_opened, emails_clicked, emails_replied, key_contact, phone, linkedin_url, company_id, companies(id, name, industry, website_url)")
-    .eq("id", params.id)
-    .maybeSingle();
-  if (error) console.error("speaker detail error", error);
+  const rows = await sql<SpeakerRow[]>`
+    select
+      c.id, c.first_name, c.last_name, c.email, c.job_title, c.lead_status,
+      c.emails_opened, c.emails_clicked, c.emails_replied, c.key_contact,
+      c.phone, c.linkedin_url, c.company_id,
+      co.name        as company_name,
+      co.industry    as company_industry,
+      co.website_url as company_website_url
+    from public.contact c
+    left join public.company co on co.id = c.company_id
+    where c.id = ${params.id}
+    limit 1
+  `;
+  const c = maybeSingle<SpeakerRow>(rows);
 
   if (!c) return notFound();
   if (!(c.key_contact || []).includes("SPEAKER")) return notFound();
 
   const name = `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Speaker";
-  const company: any = c.companies;
+  const company = c.company_id
+    ? { id: c.company_id, name: c.company_name ?? "", industry: c.company_industry, website_url: c.company_website_url }
+    : null;
 
   return (
     <div className="p-8 max-w-5xl">

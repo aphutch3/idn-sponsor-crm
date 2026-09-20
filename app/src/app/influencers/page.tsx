@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { admin } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { PageHeader, Card, Stat, Badge } from "@/components/ui";
 import { fmtNum } from "@/lib/utils";
 
@@ -29,15 +29,24 @@ function statusTone(s: "live" | "skeleton" | "planned") {
 }
 
 export default async function InfluencersOverviewPage() {
-  const db = admin();
-  const { count: speakerCount } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]);
-  const { count: speakerActive } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["SPEAKER"]).eq("lead_status", "Open");
-  // Socializers = watchlist + FRIEND-tagged contacts with LinkedIn URLs
-  const { count: friendCount } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["FRIEND"]).not("linkedin_url", "is", null);
+  const [counts] = await sql<Array<{
+    speaker_count: number;
+    speaker_active: number;
+    friend_count: number;
+  }>>`
+    select
+      count(*) filter (where key_contact @> array['SPEAKER']::text[])::int as speaker_count,
+      count(*) filter (where key_contact @> array['SPEAKER']::text[] and lead_status = 'Open')::int as speaker_active,
+      count(*) filter (where key_contact @> array['FRIEND']::text[] and linkedin_url is not null)::int as friend_count
+    from public.contact
+  `;
+  const speakerCount  = counts?.speaker_count  ?? 0;
+  const speakerActive = counts?.speaker_active ?? 0;
+  const friendCount   = counts?.friend_count   ?? 0;
 
   const COHORTS = [
-    { key: "speakers",    name: "Event Speakers", count: speakerCount || 0,                          active: speakerActive || 0, status: "live" as const, href: "/influencers/speakers" },
-    { key: "socializers", name: "Socializers",    count: SOCIALIZERS_WATCHLIST + (friendCount || 0), active: SOCIALIZERS_WATCHLIST, status: "live" as const, href: "/influencers/socializers" },
+    { key: "speakers",    name: "Event Speakers", count: speakerCount,                          active: speakerActive, status: "live" as const, href: "/influencers/speakers" },
+    { key: "socializers", name: "Socializers",    count: SOCIALIZERS_WATCHLIST + friendCount,   active: SOCIALIZERS_WATCHLIST, status: "live" as const, href: "/influencers/socializers" },
     ...COHORTS_STATIC,
   ];
 

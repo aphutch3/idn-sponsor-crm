@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { admin } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { PageHeader, Badge, Stat, Card, TableShell } from "@/components/ui";
 import { fmtNum } from "@/lib/utils";
 import { RefreshMentionsButton } from "@/components/refresh-mentions-button";
@@ -87,35 +87,62 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
   const platformFilter = (searchParams.platform || "all") as "all" | Platform;
   const q = (searchParams.q || "").trim();
 
-  const db = admin();
+  const like = q ? `%${q.replace(/[%_]/g, "")}%` : null;
 
-  // Seed roster: FRIEND-tagged contacts with LinkedIn URLs — real people we
-  // already have relationships with who publish on LinkedIn.
-  let seedQ = db.from("contacts")
-    .select("id, first_name, last_name, job_title, linkedin_url, lead_status, emails_opened, key_contact, companies(id, name)")
-    .contains("key_contact", ["FRIEND"])
-    .not("linkedin_url", "is", null)
-    .order("emails_opened", { ascending: false, nullsFirst: false });
-  if (q) seedQ = seedQ.or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,job_title.ilike.%${q}%`);
-  const { data: seed } = await seedQ.limit(50);
+  type SeedRow = {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    job_title: string | null;
+    linkedin_url: string | null;
+    lead_status: string | null;
+    emails_opened: number | null;
+    key_contact: string[] | null;
+    company_id: string | null;
+    company_name: string | null;
+  };
 
-  // KPIs
-  const { count: friendCount } = await db.from("contacts").select("id", { count: "exact", head: true }).contains("key_contact", ["FRIEND"]).not("linkedin_url", "is", null);
+  const [seed, friendCountRows, mentions, lastLogRows] = await Promise.all([
+    sql<SeedRow[]>`
+      select
+        c.id, c.first_name, c.last_name, c.job_title, c.linkedin_url, c.lead_status,
+        c.emails_opened, c.key_contact, c.company_id, co.name as company_name
+      from public.contact c
+      left join public.company co on co.id = c.company_id
+      where c.key_contact @> array['FRIEND']::text[]
+        and c.linkedin_url is not null
+        ${like ? sql`and (
+             c.first_name ilike ${like}
+          or c.last_name  ilike ${like}
+          or c.job_title  ilike ${like}
+        )` : sql``}
+      order by c.emails_opened desc nulls last
+      limit 50
+    `,
+    sql<Array<{ n: number }>>`
+      select count(*)::int as n
+        from public.contact
+       where key_contact @> array['FRIEND']::text[]
+         and linkedin_url is not null
+    `,
+    sql<Mention[]>`
+      select id, platform, author_username, author_name, text, url, topic,
+             reach_score, posted_at, impression_count, like_count
+        from public.social_mention
+       order by posted_at desc
+       limit 25
+    `,
+    sql<Array<{ ran_at: string; posts_inserted: number; queries_run: number }>>`
+      select ran_at, posts_inserted, queries_run
+        from public.social_refresh_log
+       order by id desc
+       limit 1
+    `,
+  ]);
+  const friendCount = friendCountRows[0]?.n ?? 0;
+  const lastLog = lastLogRows[0] ?? null;
   const totalReach = WATCHLIST.reduce((s, w) => s + w.followers, 0);
   const highPriority = WATCHLIST.filter((w) => w.priority === "high").length;
-
-  // Live recent mentions from social_mentions (populated by 6h xurl cron)
-  const { data: mentions } = await db.from("social_mentions")
-    .select("id, platform, author_username, author_name, text, url, topic, reach_score, posted_at, impression_count, like_count")
-    .order("posted_at", { ascending: false })
-    .limit(25);
-
-  // Latest refresh log entry for the "last synced" indicator
-  const { data: lastLog } = await db.from("social_refresh_log")
-    .select("ran_at, posts_inserted, queries_run")
-    .order("id", { ascending: false })
-    .limit(1)
-    .single();
 
   // Filter for platform tab
   const byPlatform = platformFilter === "all"
@@ -153,7 +180,7 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
       {/* Tabs */}
       <div className="flex gap-2 mt-8 border-b border-subtle">
         <TabLink label="Top reach"    tab="reach"    current={tab} count={WATCHLIST.length} />
-        <TabLink label="Recent posts" tab="posts"    current={tab} count={mentions?.length || 0} />
+        <TabLink label="Recent posts" tab="posts"    current={tab} count={mentions.length} />
         <TabLink label="By platform"  tab="platform" current={tab} count={3} />
       </div>
 
@@ -185,9 +212,9 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
           </Card>
 
           {/* FRIEND seed roster below the watchlist */}
-          {seed && seed.length > 0 && (
+          {seed.length > 0 && (
             <div className="mt-8">
-              <h4 className="text-sm uppercase tracking-wider text-muted mb-3">FRIEND-tagged seeds with LinkedIn ({fmtNum(friendCount || 0)})</h4>
+              <h4 className="text-sm uppercase tracking-wider text-muted mb-3">FRIEND-tagged seeds with LinkedIn ({fmtNum(friendCount)})</h4>
               <div className="text-xs text-muted mb-3">Real contacts we already know who publish on LinkedIn. Promote any of these into the watchlist as they scale their reach.</div>
               <TableShell>
                 <thead className="text-xs uppercase text-muted border-b border-border">
@@ -200,7 +227,7 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
                   </tr>
                 </thead>
                 <tbody>
-                  {seed.map((c: any) => (
+                  {seed.map((c) => (
                     <tr key={c.id} className="border-b border-border/50 hover:bg-subtle/50">
                       <td className="px-4 py-2">
                         <Link href={`/contacts/${c.id}`} className="hover:text-accent font-medium text-sm">
@@ -208,8 +235,8 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
                         </Link>
                       </td>
                       <td className="px-4 py-2 text-sm">
-                        {c.companies ? (
-                          <Link href={`/companies/${c.companies.id}`} className="hover:text-accent">{c.companies.name}</Link>
+                        {c.company_id && c.company_name ? (
+                          <Link href={`/companies/${c.company_id}`} className="hover:text-accent">{c.company_name}</Link>
                         ) : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-2 text-muted text-xs">{c.job_title || "—"}</td>
@@ -237,17 +264,18 @@ export default async function SocializersPage({ searchParams }: { searchParams: 
               <div className="text-xs text-muted">
                 {lastLog ? (
                   <>Last synced: {timeAgo(lastLog.ran_at)} · {lastLog.posts_inserted} posts · {lastLog.queries_run} queries</>
+
                 ) : "Never synced"}
               </div>
             </div>
           </div>
-          {(!mentions || mentions.length === 0) ? (
+          {mentions.length === 0 ? (
             <Card>
               <div className="text-sm text-muted">No mentions yet. Run <code className="mono">python3 scripts/refresh_social_mentions.py</code> or wait for the 6h cron.</div>
             </Card>
           ) : (
             <Card padded={false}>
-              {(mentions as Mention[]).map((m) => (
+              {mentions.map((m) => (
                 <div key={m.id} className="grid grid-cols-[130px_1fr_130px_100px] gap-4 px-4 py-4 border-b border-subtle last:border-b-0 items-start">
                   <div className="flex flex-col gap-1">
                     <Badge tone={platformTone(m.platform)}>{m.platform}</Badge>

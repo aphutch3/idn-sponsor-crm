@@ -1,16 +1,38 @@
-import { db } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { Card, Badge } from "@/components/ui";
 import Link from "next/link";
 import { fmtNum } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
 
+type TaxNode = {
+  macro_category: string | null;
+  group: string | null;
+  subcategory: string | null;
+  company_count: number;
+};
+
+type CompanyRow = {
+  id: string;
+  name: string;
+  domain: string | null;
+  sponsor_tier: string | null;
+  company_type: string | null;
+  summit_interest: string[] | null;
+  macro_category: string | null;
+  group: string | null;
+  subcategory: string | null;
+  is_customer: boolean | null;
+  stay_on_top: boolean | null;
+};
+
 // Marketplace panel — Macro → Group → Subcategory three-column drill-down.
 // Extracted from the former /taxonomy page so /start can host it as a tab.
 // Selected path is reflected in ?macro=&group=&sub=
 export async function MarketplacePanel({ searchParams }: { searchParams: { macro?: string; group?: string; sub?: string } }) {
-  const supa = db();
-  const { data: rows } = await supa.from("v_taxonomy").select("*");
-  const nodes = (rows || []) as { macro_category: string; group: string | null; subcategory: string | null; company_count: number }[];
+  const nodes = await sql<TaxNode[]>`
+    select macro_category, "group", subcategory, company_count
+      from public.v_taxonomy
+  `;
 
   const macros: Record<string, { total: number; groups: Record<string, { total: number; subs: Record<string, number> }> }> = {};
   for (const n of nodes) {
@@ -31,11 +53,18 @@ export async function MarketplacePanel({ searchParams }: { searchParams: { macro
   const subList = selMacro && selGroup ? Object.entries(macros[selMacro].groups[selGroup].subs).sort((a, b) => b[1] - a[1]) : [];
   const selSub = searchParams.sub;
 
-  let q = supa.from("companies").select("id, name, domain, sponsor_tier, company_type, summit_interest, macro_category, group, subcategory, is_customer, stay_on_top").order("stay_on_top", { ascending: false }).order("sponsor_tier_rank", { ascending: true, nullsFirst: false }).order("name").limit(80);
-  if (selMacro) q = q.eq("macro_category", selMacro);
-  if (selGroup) q = q.eq("group", selGroup);
-  if (selSub) q = q.eq("subcategory", selSub);
-  const { data: companies } = await q;
+  // Build the companies query as fragments so we can compose conditional WHERE clauses.
+  const companies = await sql<CompanyRow[]>`
+    select id, name, domain, sponsor_tier, company_type, summit_interest,
+           macro_category, "group", subcategory, is_customer, stay_on_top
+      from public.company
+     where 1 = 1
+       ${selMacro ? sql`and macro_category = ${selMacro}` : sql``}
+       ${selGroup ? sql`and "group" = ${selGroup}` : sql``}
+       ${selSub ? sql`and subcategory = ${selSub}` : sql``}
+     order by stay_on_top desc, sponsor_tier_rank asc nulls last, name
+     limit 80
+  `;
 
   // Marketplace drill-down links stay on /start with tab=marketplace preserved.
   const hrefFor = (query: Record<string, string | undefined>) => {
@@ -92,7 +121,7 @@ export async function MarketplacePanel({ searchParams }: { searchParams: { macro
         <h2 className="text-sm font-medium">
           Companies in{" "}
           <span className="text-accent">{selSub || selGroup || selMacro || "portfolio"}</span>
-          <span className="text-muted font-normal ml-2">({companies?.length || 0}{(companies?.length || 0) === 80 ? "+" : ""})</span>
+          <span className="text-muted font-normal ml-2">({companies.length}{companies.length === 80 ? "+" : ""})</span>
         </h2>
       </div>
 
@@ -108,7 +137,7 @@ export async function MarketplacePanel({ searchParams }: { searchParams: { macro
             </tr>
           </thead>
           <tbody>
-            {(companies || []).map((c: any) => (
+            {companies.map((c) => (
               <tr key={c.id} className="border-b border-border/50 hover:bg-subtle/50">
                 <td className="px-4 py-2">
                   <Link href={`/companies/${c.id}`} className="hover:text-accent">
@@ -132,7 +161,7 @@ export async function MarketplacePanel({ searchParams }: { searchParams: { macro
                 <td className="px-4 py-2">
                   <div className="flex flex-wrap gap-1">
                     {(c.summit_interest || []).slice(0, 2).map((s: string) => <Badge key={s} tone="default">{s}</Badge>)}
-                    {(c.summit_interest || []).length > 2 && <span className="text-xs text-muted">+{c.summit_interest.length - 2}</span>}
+                    {(c.summit_interest || []).length > 2 && <span className="text-xs text-muted">+{(c.summit_interest || []).length - 2}</span>}
                   </div>
                 </td>
               </tr>

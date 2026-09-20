@@ -1,22 +1,72 @@
-import { db } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { Card, Badge } from "@/components/ui";
 import Link from "next/link";
 import { fmtDate } from "@/lib/utils";
 import { Star, TrendingUp, Users } from "lucide-react";
 
+type KeyContactRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  job_title: string | null;
+  key_contact: string[] | null;
+  lead_status: string | null;
+  company_name: string | null;
+  company_id: string | null;
+  sponsor_tier: string | null;
+  emails_opened: number | null;
+  emails_clicked: number | null;
+  emails_replied: number | null;
+  last_email_send_date: string | null;
+  unsubscribed_all_email: boolean | null;
+};
+
+type StayOnTopRow = {
+  id: string;
+  name: string;
+  domain: string | null;
+  sponsor_tier: string | null;
+  macro_category: string | null;
+  rank_history: string | null;
+  rank_last_year: string | null;
+  rank_frequency: string | null;
+  is_customer: boolean | null;
+  summit_interest: string[] | null;
+};
+
 // Priorities panel — the people and companies to stay on top of, in one screen.
 // Extracted from the former /priorities page so /start can host it as a tab.
 export async function PrioritiesPanel() {
-  const supa = db();
-
-  const [{ data: keyContacts }, { data: stayOnTop }, { data: byKey }] = await Promise.all([
-    supa.from("v_key_contacts").select("id, first_name, last_name, email, job_title, key_contact, lead_status, company_name, company_id, sponsor_tier, emails_opened, emails_clicked, emails_replied, last_email_send_date, unsubscribed_all_email").order("emails_opened", { ascending: false, nullsFirst: false }).limit(50),
-    supa.from("companies").select("id, name, domain, sponsor_tier, macro_category, rank_history, rank_last_year, rank_frequency, is_customer, summit_interest").eq("stay_on_top", true).order("sponsor_tier_rank", { ascending: true, nullsFirst: false }).order("name"),
-    supa.from("v_key_contacts").select("key_contact"),
+  const [keyContacts, stayOnTop, keyTagRows] = await Promise.all([
+    sql<KeyContactRow[]>`
+      select id, first_name, last_name, email, job_title, key_contact, lead_status,
+             company_name, company_id, sponsor_tier,
+             emails_opened, emails_clicked, emails_replied,
+             last_email_send_date, unsubscribed_all_email
+        from public.v_key_contacts
+       order by emails_opened desc nulls last
+       limit 50
+    `,
+    sql<StayOnTopRow[]>`
+      select id, name, domain, sponsor_tier, macro_category,
+             rank_history, rank_last_year, rank_frequency,
+             is_customer, summit_interest
+        from public.company
+       where stay_on_top = true
+       order by sponsor_tier_rank asc nulls last, name
+    `,
+    // Flatten key_contact tags across all key contacts for the tag histogram.
+    sql<Array<{ tag: string; n: number }>>`
+      select tag, count(*)::int as n
+        from public.v_key_contacts, unnest(key_contact) as tag
+       group by tag
+       order by n desc
+    `,
   ]);
 
   const keyCounts: Record<string, number> = {};
-  (byKey || []).forEach((c: any) => (c.key_contact || []).forEach((k: string) => keyCounts[k] = (keyCounts[k] || 0) + 1));
+  for (const row of keyTagRows) keyCounts[row.tag] = row.n;
 
   return (
     <div className="max-w-6xl">
@@ -39,7 +89,7 @@ export async function PrioritiesPanel() {
           <div className="flex items-center gap-2 text-xs uppercase text-muted mb-2">
             <TrendingUp className="w-3.5 h-3.5" /> Rank History
           </div>
-          <div className="text-2xl font-semibold">{stayOnTop?.length || 0}</div>
+          <div className="text-2xl font-semibold">{stayOnTop.length}</div>
           <div className="text-xs text-muted mt-1">companies flagged to stay on top of — recent customers or top-tier</div>
         </Card>
 
@@ -47,7 +97,7 @@ export async function PrioritiesPanel() {
           <div className="flex items-center gap-2 text-xs uppercase text-muted mb-2">
             <Users className="w-3.5 h-3.5" /> Key Contacts
           </div>
-          <div className="text-2xl font-semibold">{keyContacts?.length || 0}</div>
+          <div className="text-2xl font-semibold">{keyContacts.length}</div>
           <div className="text-xs text-muted mt-1">tagged people needing regular touch</div>
         </Card>
       </div>
@@ -56,7 +106,7 @@ export async function PrioritiesPanel() {
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-medium">Customers to stay on top of</h2>
-          <span className="text-xs text-muted mono">({stayOnTop?.length || 0})</span>
+          <span className="text-xs text-muted mono">({stayOnTop.length})</span>
         </div>
         <Card className="overflow-hidden">
           <table className="w-full text-sm">
@@ -71,7 +121,7 @@ export async function PrioritiesPanel() {
               </tr>
             </thead>
             <tbody>
-              {(stayOnTop || []).map((c: any) => (
+              {stayOnTop.map((c) => (
                 <tr key={c.id} className="border-b border-border/50 hover:bg-subtle/50">
                   <td className="px-4 py-2">
                     <Link href={`/companies/${c.id}`} className="hover:text-accent">
@@ -90,7 +140,7 @@ export async function PrioritiesPanel() {
                   </td>
                 </tr>
               ))}
-              {(!stayOnTop || stayOnTop.length === 0) && (
+              {stayOnTop.length === 0 && (
                 <tr><td colSpan={6} className="px-4 py-6 text-center text-muted text-sm">No companies flagged yet.</td></tr>
               )}
             </tbody>
@@ -117,7 +167,7 @@ export async function PrioritiesPanel() {
               </tr>
             </thead>
             <tbody>
-              {(keyContacts || []).map((c: any) => (
+              {keyContacts.map((c) => (
                 <tr key={c.id} className="border-b border-border/50 hover:bg-subtle/50">
                   <td className="px-4 py-2">
                     <Link href={`/contacts/${c.id}`} className="hover:text-accent">
@@ -133,7 +183,7 @@ export async function PrioritiesPanel() {
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap gap-1">
-                      {(c.key_contact || []).map((k: string) => <Badge key={k} tone="accent">{k}</Badge>)}
+                      {(c.key_contact || []).map((tag: string) => <Badge key={tag} tone="accent">{tag}</Badge>)}
                       {c.unsubscribed_all_email && <Badge tone="danger">Unsub</Badge>}
                     </div>
                   </td>

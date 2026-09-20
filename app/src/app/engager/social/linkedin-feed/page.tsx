@@ -1,8 +1,9 @@
 // Unified LinkedIn feed — the triage surface The Engager was missing.
-// Reads scored posts from linkedin_posts, joins to companies/contacts,
-// renders sorted by score DESC. Static v1: no filter interactions yet.
+// Reads scored posts from public.linkedin_post, joins to public.company /
+// public.contact, renders sorted by score DESC. Static v1: no filter
+// interactions yet.
 import Link from "next/link";
-import { dbWrite } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { PageHeader, Badge, Card, Stat } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -59,36 +60,42 @@ function scoreLabel(s: number | null): string {
 }
 
 export default async function LinkedinFeedPage() {
-  // Service-role client is required because linkedin_posts RLS only allows service_role.
-  // Safe here because this is a server component with server-only env.
-  const db = dbWrite();
-
-  // Pull all scored posts (relevance_score IS NOT NULL, i.e. LLM or fallback ran)
-  const { data: postsData } = await db
-    .from("linkedin_posts")
-    .select("*")
-    .order("relevance_score", { ascending: false, nullsFirst: false })
-    .order("posted_at", { ascending: false, nullsFirst: false })
-    .limit(200);
-  const posts = (postsData ?? []) as PostRow[];
+  // Pull all scored posts. Sorted by relevance_score DESC, then posted_at DESC.
+  const posts = await sql<PostRow[]>`
+    select
+      id, post_urn, entity_type, entity_id, posted_at, post_text, post_url,
+      media_kind, reactions, comments, reposts, keyword_hits, relevance_score,
+      relevance_topics, relevance_reason, scored_at, scorer_model
+    from public.linkedin_post
+    order by relevance_score desc nulls last, posted_at desc nulls last
+    limit 200
+  `;
 
   // Resolve author entities in one round-trip each
   const companyIds = Array.from(new Set(posts.filter((p) => p.entity_type === "company").map((p) => p.entity_id)));
   const contactIds = Array.from(new Set(posts.filter((p) => p.entity_type === "contact").map((p) => p.entity_id)));
 
-  const [{ data: companiesData }, { data: contactsData }] = await Promise.all([
+  const [companies, contacts] = await Promise.all([
     companyIds.length > 0
-      ? db.from("companies").select("id, name, domain, linkedin_url").in("id", companyIds)
-      : Promise.resolve({ data: [] as CompanyLite[] }),
+      ? sql<CompanyLite[]>`
+          select id, name, domain, linkedin_url
+            from public.company
+           where id in ${sql(companyIds)}
+        `
+      : Promise.resolve([] as CompanyLite[]),
     contactIds.length > 0
-      ? db.from("contacts").select("id, full_name, first_name, last_name, company_id").in("id", contactIds)
-      : Promise.resolve({ data: [] as ContactLite[] }),
+      ? sql<ContactLite[]>`
+          select id, full_name, first_name, last_name, company_id
+            from public.contact
+           where id in ${sql(contactIds)}
+        `
+      : Promise.resolve([] as ContactLite[]),
   ]);
 
   const companyMap = new Map<string, CompanyLite>();
-  for (const c of (companiesData ?? []) as CompanyLite[]) companyMap.set(c.id, c);
+  for (const c of companies) companyMap.set(c.id, c);
   const contactMap = new Map<string, ContactLite>();
-  for (const c of (contactsData ?? []) as ContactLite[]) contactMap.set(c.id, c);
+  for (const c of contacts) contactMap.set(c.id, c);
 
   // Rollup stats
   const scored = posts.filter((p) => p.relevance_score !== null && p.scorer_model !== "prefilter");
