@@ -1,8 +1,11 @@
-// Server-only. Runs the same X-search-to-Supabase pipeline that
-// scripts/refresh_social_mentions.py runs on the 6h cron, but in TypeScript
-// so it can be triggered from the Next.js API route (Refresh now button).
+// Server-only. Runs the X-search pipeline that scripts/refresh_social_mentions.py runs
+// on the 6h cron, but in TypeScript so it can be triggered from the Next.js API route
+// (Refresh now button). Writes to canonical Neon (public.social_mention +
+// public.social_refresh_log) via postgres.js — no Supabase.
 
 import "server-only";
+import { randomUUID } from "node:crypto";
+import { sql } from "@/lib/db";
 
 const X_API_BASE = "https://api.x.com";
 
@@ -37,8 +40,10 @@ type XTweet = {
   };
 };
 
+// Row shape targeting canonical public.social_mention. The tweet id becomes
+// platform_post_id; we generate our own row uuid. raw holds the full tweet.
 type MentionRow = {
-  id: string;
+  platform_post_id: string;
   platform: "X";
   author_username: string | null;
   author_name: string | null;
@@ -56,6 +61,7 @@ type MentionRow = {
   reach_score: number;
   posted_at: string;
   fetched_at: string;
+  raw: Record<string, unknown>;
 };
 
 export type RefreshResult = {
@@ -87,7 +93,6 @@ async function xSearch(query: string, bearer: string): Promise<{ tweets: XTweet[
   const url = `${X_API_BASE}/2/tweets/search/recent?${params}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${bearer}` },
-    // Never cache — always hit live.
     cache: "no-store",
   });
   if (!res.ok) {
@@ -107,7 +112,7 @@ function buildRow(tweet: XTweet, users: Map<string, XUser>, topic: string, query
   const author = users.get(tweet.author_id);
   const url = author?.username ? `https://x.com/${author.username}/status/${tweet.id}` : null;
   return {
-    id: tweet.id,
+    platform_post_id: tweet.id,
     platform: "X",
     author_username: author?.username ?? null,
     author_name:     author?.name     ?? null,
@@ -125,46 +130,109 @@ function buildRow(tweet: XTweet, users: Map<string, XUser>, topic: string, query
     reach_score:      calcReach(m),
     posted_at:        tweet.created_at,
     fetched_at:       new Date().toISOString(),
+    raw:              { tweet, author: author ?? null },
   };
 }
 
-async function supabaseUpsert(rows: MentionRow[]): Promise<void> {
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/social_mentions?on_conflict=id`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`,
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=minimal",
-    },
-    body: JSON.stringify(rows),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Supabase upsert ${res.status}: ${body.slice(0, 300)}`);
+/**
+ * Upsert into public.social_mention on the (platform, platform_post_id) unique index.
+ * Returns { inserted, updated } counts based on xmax (Postgres MVCC trick — xmax=0 on
+ * fresh inserts, non-zero on updates). Runs in a single round-trip using multi-row
+ * INSERT ... ON CONFLICT.
+ */
+async function upsertMentions(rows: MentionRow[]): Promise<{ inserted: number; updated: number }> {
+  if (rows.length === 0) return { inserted: 0, updated: 0 };
+
+  // Build parallel column arrays for a single INSERT. Each row also gets a fresh uuid.
+  const values = rows.map((r) => ({
+    id:                randomUUID(),
+    platform:          r.platform,
+    platform_post_id:  r.platform_post_id,
+    topic:             r.topic,
+    query:             r.query,
+    url:               r.url,
+    text:              r.text,
+    author_name:       r.author_name,
+    author_username:   r.author_username,
+    author_verified:   r.author_verified,
+    posted_at:         r.posted_at,
+    fetched_at:        r.fetched_at,
+    like_count:        r.like_count,
+    reply_count:       r.reply_count,
+    retweet_count:     r.retweet_count,
+    quote_count:       r.quote_count,
+    bookmark_count:    r.bookmark_count,
+    impression_count:  r.impression_count,
+    reach_score:       r.reach_score,
+    raw:               JSON.stringify(r.raw),
+  }));
+
+  const cols = [
+    "id","platform","platform_post_id","topic","query","url","text",
+    "author_name","author_username","author_verified","posted_at","fetched_at",
+    "like_count","reply_count","retweet_count","quote_count","bookmark_count",
+    "impression_count","reach_score","raw",
+  ] as const;
+
+  try {
+    const results = await sql`
+      insert into public.social_mention ${sql(values, ...cols)}
+      on conflict (platform, platform_post_id) do update set
+        topic            = excluded.topic,
+        query            = excluded.query,
+        url              = excluded.url,
+        text             = excluded.text,
+        author_name      = excluded.author_name,
+        author_username  = excluded.author_username,
+        author_verified  = excluded.author_verified,
+        posted_at        = excluded.posted_at,
+        fetched_at       = excluded.fetched_at,
+        like_count       = excluded.like_count,
+        reply_count      = excluded.reply_count,
+        retweet_count    = excluded.retweet_count,
+        quote_count      = excluded.quote_count,
+        bookmark_count   = excluded.bookmark_count,
+        impression_count = excluded.impression_count,
+        reach_score      = excluded.reach_score,
+        raw              = excluded.raw
+      returning (xmax = 0) as inserted
+    `;
+    let inserted = 0, updated = 0;
+    for (const r of results as unknown as Array<{ inserted: boolean }>) {
+      if (r.inserted) inserted++; else updated++;
+    }
+    return { inserted, updated };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`social_mention upsert failed: ${msg}`);
   }
 }
 
-async function supabaseLog(entry: {
+/**
+ * Insert one row into public.social_refresh_log. Never throws — a log failure must
+ * not fail the refresh itself.
+ */
+async function logRefresh(entry: {
   duration_ms: number;
   queries_run: number;
   posts_inserted: number;
+  posts_updated: number;
   errors: unknown[] | null;
 }): Promise<void> {
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/social_refresh_log`;
-  await fetch(url, {
-    method: "POST",
-    headers: {
-      apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`,
-      "Content-Type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify([entry]),
-    cache: "no-store",
-  }).catch(() => { /* log failure never blocks refresh */ });
+  try {
+    await sql`
+      insert into public.social_refresh_log (
+        id, ran_at, duration_ms, queries_run, posts_inserted, posts_updated, errors
+      ) values (
+        ${randomUUID()}, now(),
+        ${entry.duration_ms}, ${entry.queries_run},
+        ${entry.posts_inserted}, ${entry.posts_updated},
+        ${entry.errors ? sql.json(entry.errors as unknown as Parameters<typeof sql.json>[0]) : null}
+      )
+    `;
+  } catch {
+    // Log failure never blocks refresh.
+  }
 }
 
 export async function refreshSocialMentions(): Promise<RefreshResult> {
@@ -201,23 +269,29 @@ export async function refreshSocialMentions(): Promise<RefreshResult> {
   }
 
   // Dedupe by tweet id — same tweet can match multiple topic queries.
+  // Keep the FIRST occurrence so topic assignment is deterministic (topic order = TOPIC_QUERIES order).
   const seen = new Map<string, MentionRow>();
-  for (const r of allRows) if (!seen.has(r.id)) seen.set(r.id, r);
+  for (const r of allRows) if (!seen.has(r.platform_post_id)) seen.set(r.platform_post_id, r);
   const deduped = Array.from(seen.values());
 
+  let inserted = 0;
+  let updated = 0;
   if (deduped.length > 0) {
     try {
-      await supabaseUpsert(deduped);
+      const counts = await upsertMentions(deduped);
+      inserted = counts.inserted;
+      updated = counts.updated;
     } catch (e) {
-      errors.push({ stage: "supabase-upsert", detail: e instanceof Error ? e.message : String(e) });
+      errors.push({ stage: "neon-upsert", detail: e instanceof Error ? e.message : String(e) });
     }
   }
 
   const duration_ms = Date.now() - started;
-  await supabaseLog({
+  await logRefresh({
     duration_ms,
     queries_run: queriesRun,
-    posts_inserted: errors.some((e) => e.stage === "supabase-upsert") ? 0 : deduped.length,
+    posts_inserted: errors.some((e) => e.stage === "neon-upsert") ? 0 : inserted,
+    posts_updated:  errors.some((e) => e.stage === "neon-upsert") ? 0 : updated,
     errors: errors.length ? errors : null,
   });
 
@@ -225,7 +299,7 @@ export async function refreshSocialMentions(): Promise<RefreshResult> {
     ok: errors.length === 0,
     duration_ms,
     queries_run: queriesRun,
-    posts_upserted: errors.some((e) => e.stage === "supabase-upsert") ? 0 : deduped.length,
+    posts_upserted: errors.some((e) => e.stage === "neon-upsert") ? 0 : inserted + updated,
     per_topic: perTopic,
     errors,
   };
