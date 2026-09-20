@@ -8,7 +8,7 @@ export const revalidate = 30;
 
 // ---------- Curated top-tier socializers (wishlist / watchlist) ---------- //
 // High-reach public voices on X, LinkedIn, and YouTube whose posts move
-// enterprise IT conversations. Not yet in Supabase — hardcoded until schema lands.
+// enterprise IT conversations. Not yet in canonical — hardcoded until schema lands.
 const WATCHLIST = [
   { handle: "@simonw",         name: "Simon Willison",         platform: "X" as const,        followers: 62000,  topics: ["LLM tooling","Prompt eval","Datasette"],           url: "https://x.com/simonw",         priority: "high" as const },
   { handle: "@karpathy",       name: "Andrej Karpathy",        platform: "X" as const,        followers: 1_200_000, topics: ["Foundation models","Nanochat","LLM education"], url: "https://x.com/karpathy",       priority: "high" as const },

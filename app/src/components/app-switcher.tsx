@@ -84,7 +84,6 @@ const FALLBACK_GROUPS: Group[] = [
     label: "Control Panels",
     apps: [
       { name: "App Mission Control", viewUrl: "https://mission-control-dusky-six.vercel.app/", devUrl: dev("09a95da6-5951-49a4-97f7-71f17a1e5991") },
-      { name: "Supabase Admin", viewUrl: "https://supabase-admin-dashboard-three.vercel.app/", devUrl: dev("68c9becf-b0cb-4e89-bbf7-f321df284c72") },
       { name: "1776 Admin", viewUrl: "https://1776-artifact-inventory.pplx.app/", devUrl: dev("f54aee1d-f721-4f3f-bea6-eddfb33d3737") },
       { name: "Home & Contractors", viewUrl: "https://home-os-gules.vercel.app/", devUrl: dev("9d6b4bcd-d237-4fb8-8807-6e4e6ce6ab50") },
       { name: "Project Manager", viewUrl: "https://idn-project-manager.vercel.app", devUrl: dev("6c3a08cd-be69-4076-a909-56536c98d059") },

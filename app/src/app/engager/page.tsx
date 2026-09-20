@@ -5,7 +5,7 @@ import { fmtNum } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 // Overview aggregates activity across every Engager sub-app.
-// Stub data — real numbers land when each sub-app is wired to Supabase.
+// Stub data — real numbers land when each sub-app is wired to canonical Neon.
 const CHANNELS = [
   { key: "email",    name: "Email Manager",  sent: 2031, engaged: 653, status: "skeleton" as const, href: "/engager/email" },
   { key: "surveyor", name: "Surveyor",       sent: 0,    engaged: 0,   status: "planned"  as const, href: "/engager/surveyor" },

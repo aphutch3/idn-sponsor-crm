@@ -97,4 +97,4 @@ Fields must appear in `filter-fields.ts` for the target entity — unknown field
 
 ## Rust port
 
-This library follows `rust-ready-typescript`. `types.ts`, `errors.ts`, `filter-schema.ts`, `filter-compile.ts`, and `filter-fields.ts` are core (pure, portable). `client.ts` is shell (Supabase-specific).
+This library follows `rust-ready-typescript`. `types.ts`, `errors.ts`, `filter-schema.ts`, `filter-compile.ts`, and `filter-fields.ts` are core (pure, portable). `client.ts` is shell (postgres.js against canonical Neon).

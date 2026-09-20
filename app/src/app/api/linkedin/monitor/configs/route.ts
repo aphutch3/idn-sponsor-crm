@@ -26,7 +26,7 @@ export async function GET() {
        order by created_at desc
     `;
 
-    // Batch-load the joined bindings + lists (mimics Supabase nested embed).
+    // Batch-load the joined bindings + lists (reproduces the previous nested embed shape).
     const bindingIds = Array.from(
       new Set(configs.map((c) => c.list_binding_id).filter((v): v is string => !!v)),
     );

@@ -128,7 +128,7 @@ export default async function SpeakerDetailPage({ params }: { params: { id: stri
         <h4 className="text-sm uppercase tracking-wider text-muted mb-3">Session history</h4>
         <Card>
           <div className="text-sm text-muted">
-            <p>No session history captured yet. Once a Sessions table lands in Supabase, this panel will list every session this speaker delivered — with summit, sponsor associations, and downstream engagement.</p>
+            <p>No session history captured yet. Once a Sessions table lands in the canonical schema, this panel will list every session this speaker delivered — with summit, sponsor associations, and downstream engagement.</p>
           </div>
         </Card>
       </div>

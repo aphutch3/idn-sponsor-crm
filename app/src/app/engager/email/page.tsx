@@ -4,7 +4,7 @@ import { fmtNum } from "@/lib/utils";
 
 export const revalidate = 30;
 
-// Skeleton stub data — replace with real Supabase queries once the campaigns
+// Skeleton stub data — replace with real canonical queries once the campaigns
 // schema and Resend wiring land.
 type Campaign = {
   id: string;
