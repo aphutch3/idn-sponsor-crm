@@ -4,7 +4,7 @@
 // derived keyword_phrases that we match against post text with word
 // boundaries. Cheap pre-filter that reduces LLM traffic to relevant posts.
 
-import { dbWrite } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 
 export type TopicTag = {
   readonly slug: string;
@@ -24,12 +24,16 @@ export async function loadTopicTags(opts?: { force?: boolean }): Promise<readonl
   if (!opts?.force && _cache && now - _cache.loaded_at < CACHE_TTL_MS) {
     return _cache.rows;
   }
-  const { data, error } = await dbWrite()
-    .from("linkedin_topic_tags")
-    .select("slug, name, category, description, keyword_phrases, articles_30d")
-    .eq("active", true);
-  if (error) throw new Error(`load_topic_tags: ${error.message}`);
-  const rawRows = (data ?? []) as TopicTag[];
+  let rawRows: TopicTag[];
+  try {
+    rawRows = await sql<TopicTag[]>`
+      select slug, name, category, description, keyword_phrases, articles_30d
+        from public.linkedin_topic_tag
+       where active = true
+    `;
+  } catch (e) {
+    throw new Error(`load_topic_tags: ${(e as Error).message}`);
+  }
   // Enrich: ensure every tag has its own name as a matchable phrase.
   // Many tags in the seed have keyword_phrases=[]; without this the
   // prefilter can't recognize the tag's own name in post text.

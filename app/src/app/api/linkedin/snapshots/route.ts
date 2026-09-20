@@ -1,7 +1,8 @@
 // Read-only snapshot lookup, filterable by monitor_config_id, entity, or fetch_type.
+// Canonical singular: public.linkedin_snapshot.
 
 import { NextRequest, NextResponse } from "next/server";
-import { dbWrite } from "@/lib/supabase";
+import { sql, dbError } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,17 +15,22 @@ export async function GET(req: NextRequest) {
   const fetchType = u.searchParams.get("fetch_type");
   const limit = Math.min(100, Math.max(1, Number(u.searchParams.get("limit") ?? "20")));
 
-  let q = dbWrite()
-    .from("linkedin_snapshots")
-    .select("id, entity_type, entity_id, fetch_type, fetched_at, source_url, http_status, content_hash, parsed, error, monitor_config_id")
-    .order("fetched_at", { ascending: false })
-    .limit(limit);
-  if (configId) q = q.eq("monitor_config_id", configId);
-  if (entityId) q = q.eq("entity_id", entityId);
-  if (entityType) q = q.eq("entity_type", entityType);
-  if (fetchType) q = q.eq("fetch_type", fetchType);
-
-  const { data, error } = await q;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ snapshots: data ?? [] });
+  try {
+    const rows = await sql`
+      select id, entity_type, entity_id, fetch_type, fetched_at, source_url,
+             http_status, content_hash, parsed, error, monitor_config_id
+        from public.linkedin_snapshot
+       where 1 = 1
+         ${configId   ? sql`and monitor_config_id = ${configId}`   : sql``}
+         ${entityId   ? sql`and entity_id         = ${entityId}`   : sql``}
+         ${entityType ? sql`and entity_type       = ${entityType}` : sql``}
+         ${fetchType  ? sql`and fetch_type        = ${fetchType}`  : sql``}
+       order by fetched_at desc
+       limit ${limit}
+    `;
+    return NextResponse.json({ snapshots: rows });
+  } catch (e) {
+    const err = dbError(e);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }

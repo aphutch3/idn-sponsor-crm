@@ -1,7 +1,8 @@
-import { admin } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { Card, PageHeader, Badge } from "@/components/ui";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 30;
 
 const TIER_ORDER = [
@@ -15,21 +16,31 @@ const TIER_ORDER = [
   "90_Purchased",
 ];
 
-export default async function PipelinePage() {
-  const db = admin();
-  const { data: companies } = await db.from("companies")
-    .select("id, name, sponsor_tier, macro_category, summit_interest, domain")
-    .not("sponsor_tier", "is", null)
-    .order("name");
+type CompanyRow = {
+  id: string;
+  name: string;
+  sponsor_tier: string | null;
+  macro_category: string | null;
+  summit_interest: string[] | null;
+  domain: string | null;
+};
 
-  const byTier: Record<string, any[]> = {};
-  (companies || []).forEach(c => {
+export default async function PipelinePage() {
+  const companies = await sql<CompanyRow[]>`
+    select id, name, sponsor_tier, macro_category, summit_interest, domain
+      from public.company
+     where sponsor_tier is not null
+     order by name
+  `;
+
+  const byTier: Record<string, CompanyRow[]> = {};
+  companies.forEach((c) => {
     const k = c.sponsor_tier || "—";
     (byTier[k] = byTier[k] || []).push(c);
   });
 
-  const orderedTiers = TIER_ORDER.filter(t => byTier[t]).concat(
-    Object.keys(byTier).filter(t => !TIER_ORDER.includes(t))
+  const orderedTiers = TIER_ORDER.filter((t) => byTier[t]).concat(
+    Object.keys(byTier).filter((t) => !TIER_ORDER.includes(t))
   );
 
   return (
@@ -37,14 +48,14 @@ export default async function PipelinePage() {
       <PageHeader title="Sponsor Pipeline" subtitle="Grouped by Sponsor Tier · drag support coming — read-only for now" />
 
       <div className="flex gap-3 overflow-x-auto pb-4">
-        {orderedTiers.map(tier => (
+        {orderedTiers.map((tier) => (
           <div key={tier} className="w-72 shrink-0">
             <div className="flex items-center justify-between mb-2 px-1">
               <Badge tone="accent">{tier}</Badge>
               <span className="mono text-xs text-muted">{byTier[tier].length}</span>
             </div>
             <div className="space-y-2">
-              {byTier[tier].map(c => (
+              {byTier[tier].map((c) => (
                 <Link key={c.id} href={`/companies/${c.id}`} className="block">
                   <Card className="p-3 hover:border-accent transition-colors">
                     <div className="font-medium text-sm truncate">{c.name}</div>

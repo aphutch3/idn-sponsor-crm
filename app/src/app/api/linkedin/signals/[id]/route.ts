@@ -1,7 +1,10 @@
 // PATCH a signal — mark triaged or dismissed.
+//
+// Canonical linkedin_signal has no dedicated triage columns; the state
+// is folded into meta.triage. We merge in a single UPDATE using jsonb ||.
 
 import { NextRequest, NextResponse } from "next/server";
-import { dbWrite } from "@/lib/supabase";
+import { sql, dbError } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,29 +13,44 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   let body: { triaged?: boolean; dismissed?: boolean; triaged_by?: string } = {};
   try { body = await req.json(); } catch {}
-  const update: Record<string, unknown> = {};
+
+  const patch: Record<string, unknown> = {};
   if (body.triaged !== undefined) {
-    update.triaged = body.triaged;
+    patch.triaged = body.triaged;
     if (body.triaged) {
-      update.triaged_at = new Date().toISOString();
-      if (body.triaged_by) update.triaged_by = body.triaged_by;
+      patch.triaged_at = new Date().toISOString();
+      if (body.triaged_by) patch.triaged_by = body.triaged_by;
     } else {
-      update.triaged_at = null;
+      patch.triaged_at = null;
     }
   }
-  if (body.dismissed !== undefined) update.dismissed = body.dismissed;
+  if (body.dismissed !== undefined) patch.dismissed = body.dismissed;
 
-  if (Object.keys(update).length === 0) {
+  if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "no fields to update" }, { status: 400 });
   }
 
-  const supa = dbWrite();
-  const { data, error } = await supa
-    .from("linkedin_signals")
-    .update(update)
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ signal: data });
+  try {
+    const rows = await sql`
+      update public.linkedin_signal
+         set meta = coalesce(meta, '{}'::jsonb)
+                    || jsonb_build_object('triage',
+                         coalesce(meta->'triage', '{}'::jsonb)
+                         || ${sql.json(patch as unknown as Parameters<typeof sql.json>[0])}::jsonb)
+       where id = ${id}
+       returning id, entity_type, entity_id, snapshot_id, prior_snapshot_id,
+                 signal_kind, before_value, after_value,
+                 created_at as detected_at,
+                 coalesce((meta->'triage'->>'triaged')::boolean,   false) as triaged,
+                 coalesce((meta->'triage'->>'dismissed')::boolean, false) as dismissed,
+                 meta
+    `;
+    if (rows.length === 0) {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+    return NextResponse.json({ signal: rows[0] });
+  } catch (e) {
+    const err = dbError(e);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
 }

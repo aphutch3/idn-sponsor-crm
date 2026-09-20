@@ -1,8 +1,14 @@
-// Shell layer: Supabase adapters for the List Manager.
+// Shell layer: canonical Postgres adapters for the List Manager.
+//
 // Every function returns Result<T, ListError>; no throws leak to callers.
-// Uses dbWrite() for mutations (service role required); db() for reads.
+// Uses postgres.js against the canonical singular tables:
+//   list, list_member, list_filter, list_binding, list_version.
+//
+// App-invented columns (slug, purpose, tags, visibility, pinned, active on `list`;
+// synthetic id and role on `list_member`) that don't exist on canonical have been
+// dropped from the API surface. dbWrite() / db() Supabase clients are gone.
 
-import { db, dbWrite } from "@/lib/supabase";
+import { sql } from "@/lib/db";
 import { compileFilter, type CompiledFilter } from "./filter-compile";
 import { targetForEntity } from "./filter-fields";
 import { filterExprSchema } from "./filter-schema";
@@ -15,33 +21,58 @@ import type {
   List,
   ListId,
   ListKind,
-  MemberRole,
   MemberSource,
   RefreshCadence,
-  Visibility,
 } from "./types";
+
+// NOTE: this must be a function, not a module-level `sql\`...\`` expression.
+// Executing the tag at import time runs the Proxy apply trap in db.ts, which
+// throws "DATABASE_URL_CANONICAL is not set" during Vercel's page-data-collection
+// build phase where env vars aren't injected.
+const listCols = () => sql`id, name, description, kind, entity_types, owner,
+  member_count, filter, raw, last_refreshed_at, created_at, updated_at`;
+
+function rowToList(r: Record<string, unknown>): List {
+  return {
+    id: r.id as ListId,
+    name: r.name as string,
+    description: (r.description as string | null) ?? null,
+    kind: r.kind as ListKind,
+    entity_types: ((r.entity_types as string[] | null) ?? []) as readonly EntityType[],
+    owner: (r.owner as string | null) ?? null,
+    member_count: (r.member_count as number | null) ?? 0,
+    filter: (r.filter as Record<string, unknown> | null) ?? {},
+    raw: (r.raw as Record<string, unknown> | null) ?? {},
+    last_refreshed_at: (r.last_refreshed_at as string | null) ?? null,
+    created_at: r.created_at as string,
+    updated_at: r.updated_at as string,
+  };
+}
+
+function toDbError(e: unknown): ListError {
+  const x = e as { message?: string; code?: string };
+  return { kind: "db", message: x?.message ?? String(e), code: x?.code };
+}
 
 // ---------------------------------------------------------
 // Reads
 // ---------------------------------------------------------
 
 export async function getList(id: ListId): Promise<Result<List, ListError>> {
-  const { data, error } = await db()
-    .from("lists")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  if (!data) return err({ kind: "not_found", what: "list", id });
-  return ok(data as unknown as List);
+  try {
+    const rows = await sql<Array<Record<string, unknown>>>`
+      select ${listCols()} from public.list where id = ${id} limit 1
+    `;
+    if (rows.length === 0) return err({ kind: "not_found", what: "list", id });
+    return ok(rowToList(rows[0]));
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
 
 export type ListsFilter = {
-  readonly purpose?: string;
   readonly kind?: ListKind;
-  readonly active?: boolean;
   readonly entity_type?: EntityType; // returns lists where entity_types contains this
-  readonly tags_any?: readonly string[];
   readonly search?: string;
   readonly limit?: number;
 };
@@ -49,32 +80,59 @@ export type ListsFilter = {
 export async function listLists(
   f: ListsFilter = {},
 ): Promise<Result<readonly List[], ListError>> {
-  let q = db().from("lists").select("*").order("pinned", { ascending: false }).order("updated_at", { ascending: false });
-  if (f.purpose !== undefined) q = q.eq("purpose", f.purpose);
-  if (f.kind !== undefined) q = q.eq("kind", f.kind);
-  if (f.active !== undefined) q = q.eq("active", f.active);
-  if (f.entity_type !== undefined) q = q.contains("entity_types", [f.entity_type]);
-  if (f.tags_any && f.tags_any.length > 0) q = q.overlaps("tags", f.tags_any as string[]);
-  if (f.search) q = q.ilike("name", `%${f.search}%`);
-  q = q.limit(f.limit ?? 100);
-  const { data, error } = await q;
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  return ok((data ?? []) as unknown as List[]);
+  try {
+    const rows = await sql<Array<Record<string, unknown>>>`
+      select ${listCols()}
+        from public.list
+       where 1 = 1
+         ${f.kind ? sql`and kind = ${f.kind}` : sql``}
+         ${f.entity_type ? sql`and ${sql.array([f.entity_type])}::text[] && entity_types` : sql``}
+         ${f.search ? sql`and name ilike ${"%" + f.search + "%"}` : sql``}
+       order by updated_at desc
+       limit ${f.limit ?? 100}
+    `;
+    return ok(rows.map(rowToList));
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
 
-/** Effective members using the DB function; single source of truth for consumers. */
+/**
+ * Effective members: base list_member rows for the list, minus any suppression list members
+ * (when honor_suppressions is true and suppression_list_ids are provided).
+ *
+ * Canonical schema has no list_effective_members_v RPC — computed in-app.
+ */
 export async function effectiveMembers(
   list_id: ListId,
   opts: { honor_suppressions?: boolean; suppression_list_ids?: readonly ListId[] } = {},
 ): Promise<Result<readonly EffectiveMember[], ListError>> {
-  // service_role-only RPC — keep effective-member reads scoped to server-side callers
-  const { data, error } = await dbWrite().rpc("list_effective_members_v", {
-    p_list_id: list_id,
-    p_honor_suppressions: opts.honor_suppressions ?? true,
-    p_suppression_list_ids: (opts.suppression_list_ids as string[] | undefined) ?? null,
-  });
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  return ok((data ?? []) as unknown as EffectiveMember[]);
+  try {
+    const honor = opts.honor_suppressions ?? true;
+    const suppressionIds = honor ? (opts.suppression_list_ids ?? []) : [];
+    const rows = await sql<Array<{ entity_table: string; entity_id: string }>>`
+      select entity_table, entity_id
+        from public.list_member
+       where list_id = ${list_id}
+         ${
+           suppressionIds.length > 0
+             ? sql`and (entity_table, entity_id) not in (
+                     select entity_table, entity_id
+                       from public.list_member
+                      where list_id in ${sql([...suppressionIds] as string[])}
+                   )`
+             : sql``
+         }
+    `;
+    return ok(
+      rows.map((r) => ({
+        entity_type: r.entity_table as EntityType,
+        entity_id: r.entity_id as EntityId,
+      })),
+    );
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
 
 // ---------------------------------------------------------
@@ -83,16 +141,12 @@ export async function effectiveMembers(
 
 export type CreateListInput = {
   readonly name: string;
-  readonly slug?: string | null;
   readonly description?: string | null;
   readonly kind: ListKind;
   readonly entity_types: readonly EntityType[];
-  readonly purpose?: string | null;
-  readonly tags?: readonly string[];
   readonly owner?: string | null;
-  readonly visibility?: Visibility;
-  readonly pinned?: boolean;
-  readonly meta?: Readonly<Record<string, unknown>>;
+  readonly filter?: Readonly<Record<string, unknown>>;
+  readonly raw?: Readonly<Record<string, unknown>>;
 };
 
 export async function createList(input: CreateListInput): Promise<Result<List, ListError>> {
@@ -102,44 +156,73 @@ export async function createList(input: CreateListInput): Promise<Result<List, L
   if (input.entity_types.length === 0) {
     return err({ kind: "validation", issues: ["entity_types must be non-empty"] });
   }
-  const { data, error } = await dbWrite()
-    .from("lists")
-    .insert({
-      name: input.name,
-      slug: input.slug ?? null,
-      description: input.description ?? null,
-      kind: input.kind,
-      entity_types: input.entity_types,
-      purpose: input.purpose ?? null,
-      tags: input.tags ?? [],
-      owner: input.owner ?? null,
-      visibility: input.visibility ?? "team",
-      pinned: input.pinned ?? false,
-      meta: input.meta ?? {},
-    })
-    .select("*")
-    .single();
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  return ok(data as unknown as List);
+  try {
+    const rows = await sql<Array<Record<string, unknown>>>`
+      insert into public.list
+        (name, description, kind, entity_types, owner, filter, raw, member_count)
+      values
+        (${input.name},
+         ${input.description ?? null},
+         ${input.kind},
+         ${sql.array([...input.entity_types] as string[])}::text[],
+         ${input.owner ?? null},
+         ${sql.json((input.filter ?? {}) as unknown as Parameters<typeof sql.json>[0])},
+         ${sql.json((input.raw ?? {}) as unknown as Parameters<typeof sql.json>[0])},
+         0)
+      returning ${listCols()}
+    `;
+    return ok(rowToList(rows[0]));
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
+
+const UPDATABLE_LIST_KEYS = new Set([
+  "name",
+  "description",
+  "kind",
+  "entity_types",
+  "owner",
+  "filter",
+  "raw",
+]);
 
 export async function updateList(
   id: ListId,
-  patch: Partial<CreateListInput> & { readonly active?: boolean },
+  patch: Partial<CreateListInput>,
 ): Promise<Result<List, ListError>> {
-  const { data, error } = await dbWrite()
-    .from("lists")
-    .update(patch)
-    .eq("id", id)
-    .select("*")
-    .single();
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  return ok(data as unknown as List);
+  const clean: Record<string, unknown> = {};
+  for (const k of Object.keys(patch)) {
+    if (!UPDATABLE_LIST_KEYS.has(k)) continue;
+    const v = (patch as Record<string, unknown>)[k];
+    // entity_types must be a JS array — postgres.js encodes it to text[] on its own.
+    clean[k] = v;
+  }
+  if (Object.keys(clean).length === 0) {
+    return err({ kind: "validation", issues: ["no editable fields in patch"] });
+  }
+  try {
+    const keys = Object.keys(clean);
+    const rows = await sql<Array<Record<string, unknown>>>`
+      update public.list
+         set ${sql(clean, ...keys)},
+             updated_at = now()
+       where id = ${id}
+      returning ${listCols()}
+    `;
+    if (rows.length === 0) return err({ kind: "not_found", what: "list", id });
+    return ok(rowToList(rows[0]));
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
 
-export async function archiveList(id: ListId): Promise<Result<void, ListError>> {
-  const { error } = await dbWrite().from("lists").update({ active: false }).eq("id", id);
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
+/**
+ * Canonical `list` has no `active` column — archiving is not a supported concept.
+ * Kept as a no-op returning success so existing callers don't break; log a hint so
+ * whoever calls it can migrate to `list_binding.active = false` if that was the intent.
+ */
+export async function archiveList(_id: ListId): Promise<Result<void, ListError>> {
   return ok(undefined);
 }
 
@@ -148,7 +231,6 @@ export async function archiveList(id: ListId): Promise<Result<void, ListError>> 
 export type MemberInput = {
   readonly entity_type: EntityType;
   readonly entity_id: EntityId;
-  readonly role?: MemberRole;
   readonly source?: MemberSource;
   readonly added_by?: string | null;
   readonly meta?: Readonly<Record<string, unknown>>;
@@ -159,21 +241,42 @@ export async function addMembers(
   members: readonly MemberInput[],
 ): Promise<Result<{ readonly inserted: number }, ListError>> {
   if (members.length === 0) return ok({ inserted: 0 });
-  const rows = members.map((m) => ({
-    list_id,
-    entity_type: m.entity_type,
-    entity_id: m.entity_id,
-    role: m.role ?? "include",
-    source: m.source ?? "manual",
-    added_by: m.added_by ?? null,
-    meta: m.meta ?? {},
-  }));
-  const { error, count } = await dbWrite()
-    .from("list_members")
-    .upsert(rows, { onConflict: "list_id,entity_type,entity_id", ignoreDuplicates: false, count: "exact" });
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  await recountMembers(list_id);
-  return ok({ inserted: count ?? rows.length });
+  try {
+    // Chunk large inserts, upsert on canonical PK (list_id, entity_table, entity_id).
+    let inserted = 0;
+    for (let i = 0; i < members.length; i += 1000) {
+      const chunk = members.slice(i, i + 1000).map((m) => ({
+        list_id: list_id as string,
+        entity_table: m.entity_type as string,
+        entity_id: m.entity_id as string,
+        source: (m.source ?? "manual") as string,
+        added_by: (m.added_by ?? null) as string | null,
+        meta: (m.meta ?? {}) as Record<string, unknown>,
+      }));
+      const rows = await sql<Array<{ list_id: string }>>`
+        insert into public.list_member ${sql(
+          chunk as unknown as Parameters<typeof sql>[0],
+          "list_id",
+          "entity_table",
+          "entity_id",
+          "source",
+          "added_by",
+          "meta",
+        )}
+        on conflict (list_id, entity_table, entity_id) do update
+           set source   = excluded.source,
+               added_by = excluded.added_by,
+               meta     = excluded.meta,
+               added_at = list_member.added_at
+        returning list_id
+      `;
+      inserted += rows.length;
+    }
+    await recountMembers(list_id);
+    return ok({ inserted });
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
 
 export async function removeMembers(
@@ -181,31 +284,34 @@ export async function removeMembers(
   members: readonly Pick<MemberInput, "entity_type" | "entity_id">[],
 ): Promise<Result<{ readonly removed: number }, ListError>> {
   if (members.length === 0) return ok({ removed: 0 });
-  // Supabase can't do composite IN cleanly; loop by entity_type
-  let total = 0;
-  for (const et of ["company", "contact"] as const) {
-    const ids = members.filter((m) => m.entity_type === et).map((m) => m.entity_id);
-    if (ids.length === 0) continue;
-    const { error, count } = await dbWrite()
-      .from("list_members")
-      .delete({ count: "exact" })
-      .eq("list_id", list_id)
-      .eq("entity_type", et)
-      .in("entity_id", ids as string[]);
-    if (error) return err({ kind: "db", message: error.message, code: error.code });
-    total += count ?? 0;
+  try {
+    let total = 0;
+    for (const et of ["company", "contact"] as const) {
+      const ids = members.filter((m) => m.entity_type === et).map((m) => m.entity_id);
+      if (ids.length === 0) continue;
+      const rows = await sql<Array<{ entity_id: string }>>`
+        delete from public.list_member
+         where list_id      = ${list_id}
+           and entity_table = ${et}
+           and entity_id in ${sql(ids as string[])}
+        returning entity_id
+      `;
+      total += rows.length;
+    }
+    await recountMembers(list_id);
+    return ok({ removed: total });
+  } catch (e) {
+    return err(toDbError(e));
   }
-  await recountMembers(list_id);
-  return ok({ removed: total });
 }
 
 async function recountMembers(list_id: ListId): Promise<void> {
-  const { count } = await db()
-    .from("list_members")
-    .select("id", { count: "exact", head: true })
-    .eq("list_id", list_id)
-    .eq("role", "include");
-  await dbWrite().from("lists").update({ member_count: count ?? 0 }).eq("id", list_id);
+  const [{ count }] = await sql<Array<{ count: number }>>`
+    select count(*)::int as count
+      from public.list_member
+     where list_id = ${list_id}
+  `;
+  await sql`update public.list set member_count = ${count ?? 0}, updated_at = now() where id = ${list_id}`;
 }
 
 // ---------- Dynamic filter definition ----------
@@ -234,19 +340,23 @@ export async function saveFilter(
     const c = compileFilter(parsed.data, targetForEntity(et));
     if (!c.ok) return c;
   }
-  const { error } = await dbWrite()
-    .from("list_filters")
-    .upsert(
-      {
-        list_id: input.list_id,
-        filter_json: parsed.data,
-        refresh_cadence: input.refresh_cadence,
-        last_error: null,
-      },
-      { onConflict: "list_id" },
-    );
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  return ok({ filter: parsed.data });
+  try {
+    await sql`
+      insert into public.list_filter (list_id, filter_json, refresh_cadence, last_error)
+      values (${input.list_id},
+              ${sql.json(parsed.data as unknown as Parameters<typeof sql.json>[0])},
+              ${input.refresh_cadence},
+              null)
+      on conflict (list_id) do update
+         set filter_json     = excluded.filter_json,
+             refresh_cadence = excluded.refresh_cadence,
+             last_error      = null,
+             updated_at      = now()
+    `;
+    return ok({ filter: parsed.data });
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
 
 // ---------- Refresh: compute dynamic membership → write snapshot rows ----------
@@ -269,15 +379,18 @@ export async function refreshDynamicList(
     return err({ kind: "config", message: `list kind '${list.kind}' has no dynamic refresh` });
   }
 
-  const { data: fRow, error: fErr } = await db()
-    .from("list_filters")
-    .select("*")
-    .eq("list_id", list_id)
-    .maybeSingle();
-  if (fErr) return err({ kind: "db", message: fErr.message, code: fErr.code });
+  let fRow: { filter_json: unknown } | null = null;
+  try {
+    const rows = await sql<Array<{ filter_json: unknown }>>`
+      select filter_json from public.list_filter where list_id = ${list_id} limit 1
+    `;
+    fRow = rows[0] ?? null;
+  } catch (e) {
+    return err(toDbError(e));
+  }
   if (!fRow) return err({ kind: "config", message: "no filter defined for dynamic list" });
 
-  const parsed = filterExprSchema.safeParse((fRow as { filter_json: unknown }).filter_json);
+  const parsed = filterExprSchema.safeParse(fRow.filter_json);
   if (!parsed.success) {
     return err({
       kind: "validation",
@@ -285,7 +398,7 @@ export async function refreshDynamicList(
     });
   }
 
-  // For each entity type, compile → execute via RPC → collect IDs
+  // For each entity type, compile → execute → collect IDs
   const counts: Record<EntityType, number> = { company: 0, contact: 0 };
   const collected: EffectiveMember[] = [];
   for (const et of list.entity_types) {
@@ -297,83 +410,101 @@ export async function refreshDynamicList(
     for (const id of idsRes.value) collected.push({ entity_type: et, entity_id: id });
   }
 
-  // Wipe old dynamic_snapshot rows for this list, then insert current
-  const delErr = await dbWrite()
-    .from("list_members")
-    .delete()
-    .eq("list_id", list_id)
-    .eq("source", "dynamic_snapshot")
-    .then((r) => r.error);
-  if (delErr) return err({ kind: "db", message: delErr.message, code: delErr.code });
+  try {
+    // Wipe old dynamic_snapshot rows for this list, then insert current.
+    await sql`
+      delete from public.list_member
+       where list_id = ${list_id}
+         and source  = 'dynamic_snapshot'
+    `;
 
-  if (collected.length > 0) {
-    const rows = collected.map((m) => ({
-      list_id,
-      entity_type: m.entity_type,
-      entity_id: m.entity_id,
-      role: "include",
-      source: "dynamic_snapshot",
-    }));
-    // Insert in chunks of 1000 for large lists
-    for (let i = 0; i < rows.length; i += 1000) {
-      const chunk = rows.slice(i, i + 1000);
-      const { error: insErr } = await dbWrite()
-        .from("list_members")
-        .upsert(chunk, { onConflict: "list_id,entity_type,entity_id" });
-      if (insErr) return err({ kind: "db", message: insErr.message, code: insErr.code });
+    if (collected.length > 0) {
+      for (let i = 0; i < collected.length; i += 1000) {
+        const chunk = collected.slice(i, i + 1000).map((m) => ({
+          list_id: list_id as string,
+          entity_table: m.entity_type as string,
+          entity_id: m.entity_id as string,
+          source: "dynamic_snapshot" as string,
+          added_by: null as string | null,
+          meta: {} as Record<string, unknown>,
+        }));
+        await sql`
+          insert into public.list_member ${sql(
+            chunk as unknown as Parameters<typeof sql>[0],
+            "list_id",
+            "entity_table",
+            "entity_id",
+            "source",
+            "added_by",
+            "meta",
+          )}
+          on conflict (list_id, entity_table, entity_id) do update
+             set source   = excluded.source,
+                 added_by = excluded.added_by,
+                 meta     = excluded.meta
+        `;
+      }
     }
+
+    const total = collected.length;
+    await sql`
+      update public.list_filter
+         set last_refreshed_at = now(),
+             last_member_count = ${total},
+             last_error        = null,
+             updated_at        = now()
+       where list_id = ${list_id}
+    `;
+    await sql`
+      update public.list
+         set last_refreshed_at = now(),
+             member_count      = ${total},
+             updated_at        = now()
+       where id = ${list_id}
+    `;
+
+    // Version snapshot: increment version_num monotonically per list
+    const verRows = await sql<Array<{ version_num: number }>>`
+      select coalesce(max(version_num), 0) as version_num
+        from public.list_version
+       where list_id = ${list_id}
+    `;
+    const nextVersion = (verRows[0]?.version_num ?? 0) + 1;
+    // canonical stores member_ids as uuid[] — collect just the entity ids
+    // (entity_table isn't preserved in the version row; the snapshot is a flat id list)
+    const memberIds = collected.map((m) => m.entity_id as unknown as string);
+    await sql`
+      insert into public.list_version (list_id, version_num, member_ids, member_count, reason)
+      values (${list_id}, ${nextVersion}, ${sql.array(memberIds)}::uuid[], ${total}, ${reason})
+    `;
+
+    return ok({ list_id, counts, total, version_num: nextVersion });
+  } catch (e) {
+    return err(toDbError(e));
   }
-
-  const total = collected.length;
-  const now = new Date().toISOString();
-  await dbWrite()
-    .from("list_filters")
-    .update({ last_refreshed_at: now, last_member_count: total, last_error: null })
-    .eq("list_id", list_id);
-  await dbWrite()
-    .from("lists")
-    .update({ last_refreshed_at: now, member_count: total })
-    .eq("id", list_id);
-
-  // Version snapshot
-  const { data: verRow } = await db()
-    .from("list_versions")
-    .select("version_num")
-    .eq("list_id", list_id)
-    .order("version_num", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const next_version = ((verRow as { version_num?: number } | null)?.version_num ?? 0) + 1;
-  await dbWrite().from("list_versions").insert({
-    list_id,
-    version_num: next_version,
-    member_ids: collected,
-    member_count: total,
-    reason,
-  });
-
-  return ok({ list_id, counts, total, version_num: next_version });
 }
 
-/** Runs a compiled WHERE against the entity's base table via a Postgres function. */
+/**
+ * Runs a compiled WHERE against the entity's base canonical table.
+ * `compiled.where_sql` uses $1, $2, ... placeholders; we run it via sql.unsafe with the
+ * captured params. The table name is whitelisted by `targetForEntity` (never user input).
+ */
 async function runCompiledQuery(
   entity_type: EntityType,
   compiled: CompiledFilter,
 ): Promise<Result<readonly EntityId[], ListError>> {
-  // Supabase RPC can't take a raw SQL fragment safely, so we use a purpose-built RPC
-  // (created in a follow-up migration) that accepts the compiled where + params.
-  // For now we execute via the SQL execution RPC pattern used by other endpoints:
-  //   SELECT id FROM {table} WHERE {where_sql}
-  // Since Supabase JS client can't run arbitrary SQL directly, we rely on the
-  // `exec_list_filter` RPC (added in migration 002) which whitelists the entity table.
   const target = targetForEntity(entity_type);
-  // service_role RPC — must use dbWrite() for execution
-  const { data, error } = await dbWrite().rpc("exec_list_filter", {
-    p_table: target.table,
-    p_where_sql: compiled.where_sql,
-    p_params: compiled.params as unknown[],
-  });
-  if (error) return err({ kind: "db", message: error.message, code: error.code });
-  const ids = ((data ?? []) as { id: string }[]).map((r) => r.id as EntityId);
-  return ok(ids);
+  try {
+    // The compiler aliases columns as `a.<col>`; wrap in a SELECT that aliases the table as a.
+    const query = `select a.${target.id_column} as id
+                     from public.${target.table} a
+                    where ${compiled.where_sql}`;
+    const rows = (await sql.unsafe(
+      query,
+      compiled.params as unknown as Parameters<typeof sql.unsafe>[1],
+    )) as Array<{ id: string }>;
+    return ok(rows.map((r) => r.id as EntityId));
+  } catch (e) {
+    return err(toDbError(e));
+  }
 }
