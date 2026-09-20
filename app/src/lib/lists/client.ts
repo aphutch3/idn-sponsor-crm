@@ -6,7 +6,7 @@
 //
 // App-invented columns (slug, purpose, tags, visibility, pinned, active on `list`;
 // synthetic id and role on `list_member`) that don't exist on canonical have been
-// dropped from the API surface. dbWrite() / db() Supabase clients are gone.
+// dropped from the API surface. Everything runs on postgres.js against canonical Neon.
 
 import { sql } from "@/lib/db";
 import { compileFilter, type CompiledFilter } from "./filter-compile";

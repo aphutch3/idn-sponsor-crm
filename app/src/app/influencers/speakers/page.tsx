@@ -5,9 +5,9 @@ import { fmtNum } from "@/lib/utils";
 
 export const revalidate = 30;
 
-// ---------- Prospects (curated wishlist — not in Supabase yet) ---------- //
+// ---------- Prospects (curated wishlist — not in canonical schema yet) ---------- //
 // These are ideal speakers we want to land for future summits.
-// Editable inline; will move to Supabase once schema lands.
+// Editable inline; will move to canonical once schema lands.
 const PROSPECTS = [
   { name: "Charity Majors",      title: "CTO & Co-founder",              company: "Honeycomb",       topics: ["Observability","SRE","AI eval"], targetSummit: "AI Ops 2026",         status: "invited",   lastTouch: "2026-08-14" },
   { name: "Kelsey Hightower",    title: "Independent",                   company: "—",               topics: ["Platform","Kubernetes","DevEx"], targetSummit: "AI Platforms 2026",   status: "confirmed", lastTouch: "2026-09-02" },
