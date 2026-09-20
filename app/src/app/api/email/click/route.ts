@@ -1,7 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { dbWrite } from "@/lib/supabase";
-
 // GET /api/email/click?s=<send_id>&u=<url>  → logs click and redirects.
+//
+// Canonical: insert a 'clicked' event into public.campaign_send_event.
+// The AFTER INSERT trigger update_campaign_send_rollups() handles:
+//   - campaign_send.clicks += 1
+//   - first_clicked_at / last_clicked_at / last_clicked_url
+//   - last_event_at
+//   - contact.emails_clicked, last_email_click_date rollups
+
+import { NextRequest, NextResponse } from "next/server";
+import { sql } from "@/lib/db";
+
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
@@ -10,12 +18,18 @@ export async function GET(req: NextRequest) {
   const target = u && /^https?:\/\//i.test(u) ? u : "/";
   if (s) {
     try {
-      const write = dbWrite();
-      const now = new Date().toISOString();
-      await write.rpc("record_email_click", { send_id: s, clicked_at: now, url: u }).then(() => {}, async () => {
-        await write.from("campaign_sends").update({ clicks: 1, last_clicked_at: now, last_clicked_url: u }).eq("id", s);
-      });
-    } catch {}
+      const ua = req.headers.get("user-agent");
+      const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+      const referrer = req.headers.get("referer");
+      await sql`
+        insert into public.campaign_send_event
+          (send_id, event_kind, occurred_at, url, user_agent, ip_address, referrer)
+        values
+          (${s}, ${"clicked"}, ${new Date().toISOString()}, ${u}, ${ua}, ${ip}, ${referrer})
+      `;
+    } catch {
+      // best-effort — always redirect regardless
+    }
   }
   return NextResponse.redirect(target, { status: 302 });
 }
