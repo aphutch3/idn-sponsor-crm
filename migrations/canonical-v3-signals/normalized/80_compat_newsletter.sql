@@ -24,48 +24,109 @@ comment on schema compat is
 -- than replaced: CREATE OR REPLACE VIEW cannot reorder or rename columns, and
 -- nothing in the canonical model is permitted to depend on a compat view.
 drop view if exists compat.articles;
+drop view if exists compat._legacy_id;
 drop view if exists compat.issues;
 drop view if exists compat.newsletters;
+drop view if exists compat.newsletter_sources;
 drop view if exists compat.publishers;
 drop view if exists compat.source_publications;
 
--- ---------------------------------------------------------------- publishers
--- Legacy: id, name, website, created_at
--- Canonical: content_publication is the domain-level publication registry.
-create view compat.publishers as
+-- ------------------------------------------------------------- legacy id map
+-- The app addresses every row by its legacy integer id (/api/articles/5009,
+-- newsletter_id=eq.12, ...). Those ids are preserved in external_ref as
+-- '<table>:<id>' under source_system 'news_dashboard'. Exposing the canonical
+-- uuid instead would silently break every id-addressed route and foreign key
+-- in the dashboard, so the compat views project the legacy id as `id` and
+-- translate foreign keys back to legacy ids too.
+create or replace view compat._legacy_id as
 select
-  p.id,
-  p.name,
-  p.domain          as website,
-  p.created_at
-from public.content_publication p;
+  entity_table,
+  entity_id,
+  split_part(external_id, ':', 1)          as legacy_table,
+  split_part(external_id, ':', 2)::bigint  as legacy_id
+from public.external_ref
+where source_system = 'news_dashboard';
+
+comment on view compat._legacy_id is
+  'Internal: canonical uuid -> legacy news_dashboard integer id. Not a legacy '
+  'shape; consumed by the other compat views.';
+
+-- ---------------------------------------------------------------- publishers
+-- Legacy: id, name, website, created_at (49 rows)
+-- Publishers are NOT content_publication rows -- content_publication is the
+-- legacy `source_publications` table (2118 outbound link domains), a different
+-- concept entirely. The 49 publishers are newsletter owners, preserved
+-- losslessly on content_source.raw.publisher: Phase D found only 1 of 49
+-- matched a canonical company by name and several are individual people, so
+-- linking them to company would reintroduce the person/company conflation
+-- Phase D had just removed. They stay unlinked pending human adjudication.
+create view compat.publishers as
+select distinct on ((s.raw -> 'publisher' ->> 'id')::bigint)
+  (s.raw -> 'publisher' ->> 'id')::bigint              as id,
+   s.raw -> 'publisher' ->> 'name'                     as name,
+   s.raw -> 'publisher' ->> 'website'                  as website,
+  (s.raw -> 'publisher' ->> 'created_at')::timestamptz as created_at
+from public.content_source s
+where s.raw -> 'publisher' ->> 'id' is not null
+order by (s.raw -> 'publisher' ->> 'id')::bigint;
 
 -- --------------------------------------------------------------- newsletters
 -- Legacy: id, name, slug, description, category, source_type, publisher_id,
---         created_at
--- Canonical: content_source rows of kind 'newsletter'.
--- `category` and `publisher_id` have no canonical home on the source; they
--- were denormalized display fields and are surfaced from raw where present.
+--         created_at (68 rows)
+-- A content_source exists for all 74 registry entries, and `kind` cannot tell
+-- the 68 true newsletters from the 6 registry-only sources, so select on the
+-- raw payload that only a true newsletter carries. publisher_id is a legacy
+-- bigint, not a canonical uuid.
 create view compat.newsletters as
 select
-  s.id,
+  (s.raw -> 'newsletters' ->> 'id')::bigint                     as id,
   s.name,
   s.slug,
   s.description,
-  nullif(s.raw -> 'newsletters' ->> 'category', '')           as category,
-  nullif(s.raw -> 'newsletters' ->> 'source_type', '')        as source_type,
-  nullif(s.raw -> 'newsletters' ->> 'publisher_id', '')::uuid as publisher_id,
+  nullif(s.raw -> 'newsletters' ->> 'category', '')             as category,
+  nullif(s.raw -> 'newsletters' ->> 'source_type', '')          as source_type,
+  (s.raw -> 'newsletters' ->> 'publisher_id')::bigint           as publisher_id,
   s.created_at
 from public.content_source s
-where s.kind = 'newsletter_article';
+where s.raw ? 'newsletters';
+
+-- ---------------------------------------------------------- newsletter_sources
+-- Legacy ingestion registry: 74 rows, a superset of the 68 newsletters.
+-- Every legacy column is projected, and only legacy columns are: an earlier
+-- draft invented sender_email/archive_url/format, which the source system
+-- never had, so /api/newsletters failed on the columns it really sends
+-- (topic, frequency, is_ingestable, last_ingested_at, ...).
+create view compat.newsletter_sources as
+select
+  (s.raw -> 'newsletter_sources' ->> 'id')::bigint                as id,
+   s.raw -> 'newsletter_sources' ->> 'name'                       as name,
+   s.raw -> 'newsletter_sources' ->> 'email'                      as email,
+   s.raw -> 'newsletter_sources' ->> 'topic'                      as topic,
+   s.raw -> 'newsletter_sources' ->> 'notes'                      as notes,
+   s.raw -> 'newsletter_sources' ->> 'publisher'                  as publisher,
+   s.raw -> 'newsletter_sources' ->> 'fetch_url'                  as fetch_url,
+   s.raw -> 'newsletter_sources' ->> 'frequency'                  as frequency,
+   s.raw -> 'newsletter_sources' ->> 'description'                as description,
+   s.raw -> 'newsletter_sources' ->> 'source_type'                as source_type,
+  (s.raw -> 'newsletter_sources' ->> 'is_active')::boolean        as is_active,
+  (s.raw -> 'newsletter_sources' ->> 'is_ingestable')::boolean    as is_ingestable,
+  (s.raw -> 'newsletter_sources' ->> 'last_ingested_at')::timestamptz as last_ingested_at,
+  (s.raw -> 'newsletter_sources' ->> 'created_at')::timestamptz   as created_at
+from public.content_source s
+where s.raw ? 'newsletter_sources';
+
+comment on view compat.newsletter_sources is
+  'Legacy news_dashboard.newsletter_sources shape. is_active is read from raw '
+  'rather than content_source.is_active so the view reports what the source '
+  'system recorded, not what the canonical load derived from it.';
 
 -- ------------------------------------------------------------------- issues
 -- Legacy: id, newsletter_id, issue_date, issue_number, subject, archive_url,
 --         email_id, raw_excerpt, ingested_at
 create view compat.issues as
 select
-  e.id,
-  e.content_source_id                       as newsletter_id,
+  (e.raw -> 'issues' ->> 'id')::bigint      as id,
+  (e.raw -> 'issues' ->> 'newsletter_id')::bigint as newsletter_id,
   e.edition_date                            as issue_date,
   e.edition_number                          as issue_number,
   e.title                                   as subject,
@@ -79,7 +140,7 @@ from public.content_edition e;
 -- Legacy: id, domain, name, kind, created_at
 create view compat.source_publications as
 select
-  p.id,
+  (p.raw -> 'source_publications' ->> 'id')::bigint       as id,
   p.domain,
   p.name,
   nullif(p.raw -> 'source_publications' ->> 'kind', '')  as kind,
@@ -131,15 +192,18 @@ item_people as (
   group by ce.content_item_id
 )
 select
-  ni.content_item_id                       as id,
-  ni.content_edition_id                    as issue_id,
-  e.content_source_id                      as newsletter_id,
-  i.content_publication_id                 as source_pub_id,
+  li.legacy_id                             as id,
+  (e.raw -> 'issues' ->> 'id')::bigint     as issue_id,
+  (e.raw -> 'issues' ->> 'newsletter_id')::bigint as newsletter_id,
+  (pub.raw -> 'source_publications' ->> 'id')::bigint as source_pub_id,
   i.title                                  as headline,
   i.summary,
   i.url                                    as article_url,
   ni.raw_url,
-  ni.section,
+  -- Legacy `section` is NOT NULL in practice: 0 nulls, 221 empty strings. The
+  -- load normalised '' to null, so project it back or every one of those 221
+  -- rows reads differently through the view than through PostgREST.
+  coalesce(ni.section, '')                 as section,
   ni.position,
   ni.item_type,
   ni.read_time_minutes,
@@ -212,8 +276,12 @@ select
 
   nullif(i.raw ->> 'sponsor_name', '')     as sponsor_name
 from public.content_newsletter_item ni
+join compat._legacy_id li
+  on li.entity_table = 'content_item'
+ and li.entity_id    = ni.content_item_id
 join public.content_item i        on i.id  = ni.content_item_id
 join public.content_edition e     on e.id  = ni.content_edition_id
+left join public.content_publication pub on pub.id = i.content_publication_id
 left join public.content_enrichment en on en.content_item_id = i.id
 left join signals.reader_cache rc      on rc.content_item_id = i.id;
 
@@ -221,3 +289,47 @@ comment on view compat.articles is
   'Legacy articles shape, 1:1 with content_item via its single newsletter '
   'placement. Repeated article_urls in the legacy table remain distinct rows '
   'because each legacy row maps to its own content_item.';
+
+-- ------------------------------------------- v_newsletter_article_stats
+-- Per-newsletter article counts. The dashboard treats a failure here as
+-- "zero articles" rather than an error, so an absent view degrades SILENTLY
+-- into a wrong page -- which is why it is defined here rather than left to
+-- the un-migrated tail.
+--
+-- last_ingest_at / last_ingest_count are derived from the articles themselves
+-- (the newest created_at, and how many rows share that ingest minute), because
+-- news_dashboard.ingestion_runs is operational telemetry for a pipeline that
+-- still writes to the source system and has not been migrated.
+drop view if exists compat.v_newsletter_article_stats;
+create view compat.v_newsletter_article_stats as
+with per_article as (
+  select a.newsletter_id, a.created_at
+  from compat.articles a
+  where a.newsletter_id is not null
+),
+newest as (
+  select newsletter_id, max(created_at) as last_ingest_at
+  from per_article group by newsletter_id
+)
+select
+  n.id                                     as newsletter_id,
+  n.name                                   as newsletter_name,
+  coalesce(c.total_articles, 0)::bigint    as total_articles,
+  w.last_ingest_at                         as last_ingest_at,
+  coalesce(b.last_ingest_count, 0)::bigint as last_ingest_count
+from compat.newsletters n
+left join (
+  select newsletter_id, count(*) as total_articles
+  from per_article group by newsletter_id
+) c on c.newsletter_id = n.id
+left join newest w on w.newsletter_id = n.id
+left join lateral (
+  select count(*) as last_ingest_count
+  from per_article p
+  where p.newsletter_id = n.id
+    and date_trunc('minute', p.created_at) = date_trunc('minute', w.last_ingest_at)
+) b on true;
+
+comment on view compat.v_newsletter_article_stats is
+  'Legacy news_dashboard.v_newsletter_article_stats shape. Powers the article '
+  'counts on /api/newsletters, which silently render 0 if this view is absent.';
