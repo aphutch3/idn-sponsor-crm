@@ -327,8 +327,10 @@ left join lateral (
 create or replace view compat.yt_sync_runs as
 select
   -- The legacy integer id, recovered from external_ref rather than stored a
-  -- second time on job_run.
-  (split_part(er.external_id, ':', 2))::bigint as id,
+  -- second time on job_run. Guarded because a view select-list cast is not
+  -- guaranteed to run after the view WHERE clause, and external_ref holds
+  -- non-numeric ids from other sources -- see 112.
+  public.legacy_bigint(er.external_id, 'yt_sync_runs') as id,
   r.params ->> 'job'                      as job,
   r.params ->> 'backend'                  as backend,
   r.status::text                          as status,
